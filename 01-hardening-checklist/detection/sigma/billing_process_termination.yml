@@ -1,0 +1,75 @@
+title: Billing Or Venue Control Process Termination Attempt
+id: 58f9bf1a-1f0d-4d28-a9d8-2ff2e4be74f8
+status: experimental
+description: >
+  Detects process creation events that may indicate attempts to terminate or
+  manipulate billing agents, restoration agents, logging forwarders, endpoint
+  protection, or venue control software. This rule is intentionally
+  vendor-neutral and should be tuned with local process names. It is useful in
+  internet cafe and gaming venue environments where customer-facing hosts should
+  not be able to stop business-control or evidence-generating processes.
+author: CafeSec Lab
+date: 2026/05/13
+license: MIT
+references:
+  - https://attack.mitre.org/techniques/T1562/001/
+  - https://attack.mitre.org/techniques/T1059/
+  - https://learn.microsoft.com/windows/security/threat-protection/auditing/event-4688
+tags:
+  - attack.defense_evasion
+  - attack.execution
+  - attack.t1562.001
+  - attack.t1059
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_tools:
+    Image|endswith:
+      - '\taskkill.exe'
+      - '\sc.exe'
+      - '\net.exe'
+      - '\net1.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\wmic.exe'
+  selection_termination_args:
+    CommandLine|contains:
+      - ' /f '
+      - ' /im '
+      - ' stop '
+      - 'Stop-Process'
+      - 'Stop-Service'
+      - 'Win32_Process'
+      - 'Terminate'
+  selection_venue_targets:
+    CommandLine|contains:
+      - 'billing'
+      - 'cashier'
+      - 'clientagent'
+      - 'restore'
+      - 'rollback'
+      - 'watchdog'
+      - 'wazuh'
+      - 'sysmon'
+      - 'defender'
+      - 'windefend'
+  filter_approved_admin_paths:
+    ParentImage|contains:
+      - '\Program Files\ApprovedAdminTools\'
+      - '\Windows\System32\services.exe'
+  condition: selection_tools and selection_termination_args and selection_venue_targets and not filter_approved_admin_paths
+fields:
+  - UtcTime
+  - Computer
+  - User
+  - Image
+  - ParentImage
+  - CommandLine
+  - ParentCommandLine
+falsepositives:
+  - Approved maintenance scripts during documented support windows
+  - Vendor updater stopping and restarting its own services
+  - EDR or management tooling performing controlled remediation
+  - Lab validation of the incident response playbook
+level: high

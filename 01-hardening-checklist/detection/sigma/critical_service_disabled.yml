@@ -1,0 +1,71 @@
+title: Critical Venue Service Disabled Stopped Or Installed
+id: 92bd2cf4-c23e-4ee8-a4d6-90f07f755d96
+status: experimental
+description: >
+  Detects Windows service events that may affect billing, restoration, logging,
+  backup, endpoint protection, or remote support control planes in a shared-PC
+  venue. Service stop, crash, disablement, or unexpected service installation
+  should be correlated with process creation, user logon, vendor support, and
+  billing software audit logs.
+author: CafeSec Lab
+date: 2026/05/13
+license: MIT
+references:
+  - https://attack.mitre.org/techniques/T1562/001/
+  - https://attack.mitre.org/techniques/T1543/003/
+  - https://learn.microsoft.com/windows/security/threat-protection/auditing/event-4697
+tags:
+  - attack.persistence
+  - attack.defense_evasion
+  - attack.t1543.003
+  - attack.t1562.001
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_service_events:
+    EventID:
+      - 7034
+      - 7035
+      - 7036
+      - 7040
+      - 7045
+  selection_critical_names:
+    Provider_Name|contains:
+      - 'Service Control Manager'
+    Message|contains:
+      - 'billing'
+      - 'cashier'
+      - 'client agent'
+      - 'restore'
+      - 'rollback'
+      - 'watchdog'
+      - 'Wazuh'
+      - 'Sysmon'
+      - 'Windows Defender'
+      - 'WinDefend'
+      - 'backup'
+  selection_bad_state:
+    Message|contains:
+      - 'stopped'
+      - 'disabled'
+      - 'terminated unexpectedly'
+      - 'installed'
+      - 'start type'
+  filter_maintenance:
+    Message|contains:
+      - 'ApprovedMaintenance'
+      - 'VendorUpdateWindow'
+  condition: selection_service_events and selection_critical_names and selection_bad_state and not filter_maintenance
+fields:
+  - TimeCreated
+  - Computer
+  - Provider_Name
+  - EventID
+  - Message
+falsepositives:
+  - Legitimate vendor updates that stop services before replacement
+  - Planned patching or reboot windows
+  - Initial software installation during approved deployment
+  - Service restarts caused by resource exhaustion or power events
+level: high

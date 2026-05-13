@@ -1,0 +1,70 @@
+title: Anomalous Registry Modification Affecting Venue Control Or Security
+id: e1fc50ea-ae34-4d37-8ae1-854551ddf4ac
+status: experimental
+description: >
+  Detects registry modifications in locations that commonly affect startup,
+  security policy, proxy settings, DNS behavior, Defender, PowerShell logging,
+  AppLocker, and billing software configuration. In a gaming venue, these
+  changes should be rare outside approved deployment or support windows and
+  should be correlated with user, process, and host role.
+author: CafeSec Lab
+date: 2026/05/13
+license: MIT
+references:
+  - https://attack.mitre.org/techniques/T1112/
+  - https://attack.mitre.org/techniques/T1547/
+  - https://attack.mitre.org/techniques/T1562/001/
+  - https://learn.microsoft.com/windows/security/threat-protection/auditing/event-4657
+tags:
+  - attack.defense_evasion
+  - attack.persistence
+  - attack.t1112
+  - attack.t1547
+  - attack.t1562.001
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_registry_event:
+    EventID: 4657
+  selection_paths:
+    ObjectName|contains:
+      - '\Software\Microsoft\Windows\CurrentVersion\Run'
+      - '\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+      - '\System\CurrentControlSet\Services\'
+      - '\Software\Policies\Microsoft\Windows Defender'
+      - '\Software\Policies\Microsoft\Windows\PowerShell'
+      - '\Software\Policies\Microsoft\Windows\SrpV2'
+      - '\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+      - '\System\CurrentControlSet\Services\Tcpip\Parameters'
+      - '\Software\VenueBilling'
+  selection_value_names:
+    ObjectValueName|contains:
+      - 'ImagePath'
+      - 'Start'
+      - 'DisableAntiSpyware'
+      - 'DisableRealtimeMonitoring'
+      - 'EnableScriptBlockLogging'
+      - 'ProxyServer'
+      - 'NameServer'
+      - 'ServerAddress'
+      - 'UpdateUrl'
+  filter_approved_change:
+    SubjectUserName|contains:
+      - 'svc_patch'
+      - 'svc_config'
+  condition: selection_registry_event and selection_paths and selection_value_names and not filter_approved_change
+fields:
+  - TimeCreated
+  - Computer
+  - SubjectUserName
+  - ProcessName
+  - ObjectName
+  - ObjectValueName
+  - NewValue
+falsepositives:
+  - Group Policy refreshes
+  - Vendor updates during approved maintenance windows
+  - Endpoint management tools applying baseline configuration
+  - Initial deployment or lab testing
+level: medium
