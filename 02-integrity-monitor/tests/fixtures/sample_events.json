@@ -1,0 +1,32 @@
+[
+  {
+    "event_id": 7036,
+    "source": "Service Control Manager",
+    "channel": "System",
+    "computer": "CLIENT-01",
+    "timestamp": "2026-05-13T10:00:00Z",
+    "user": null,
+    "message": "The billing client agent service entered the stopped state.",
+    "data": {"service": "Billing Client Agent"}
+  },
+  {
+    "event_id": 1102,
+    "source": "Microsoft-Windows-Eventlog",
+    "channel": "Security",
+    "computer": "CASHIER-01",
+    "timestamp": "2026-05-13T10:05:00Z",
+    "user": "cashier01",
+    "message": "The audit log was cleared.",
+    "data": {"subject_user": "cashier01"}
+  },
+  {
+    "event_id": 4688,
+    "source": "Microsoft-Windows-Security-Auditing",
+    "channel": "Security",
+    "computer": "CLIENT-02",
+    "timestamp": "2026-05-13T10:10:00Z",
+    "user": "player",
+    "message": "New Process Name: C:\\Windows\\System32\\taskkill.exe Command Line: taskkill /f /im billing.exe",
+    "data": {"process": "taskkill.exe", "target": "billing.exe"}
+  }
+]

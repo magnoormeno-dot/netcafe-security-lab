@@ -1,0 +1,36 @@
+# CafeSec Integrity Monitor example configuration.
+# Copy this file and adjust paths before use.
+
+targets:
+  - "C:\\CafeBilling"
+  - "C:\\Program Files\\CafeBilling\\**\\*.exe"
+  - "C:\\Program Files\\CafeBilling\\**\\*.dll"
+  - "C:\\ProgramData\\CafeBilling\\config\\*.json"
+
+excludes:
+  - "*.log"
+  - "*.tmp"
+  - "*\\cache\\*"
+
+algorithms:
+  - sha256
+  - blake3
+
+alerting:
+  dedup_window_seconds: 900
+  file: "C:\\CafeSec\\alerts.jsonl"
+
+process_monitor:
+  protected_process_keywords:
+    - billing
+    - cashier
+    - clientagent
+    - rollback
+    - restore
+    - watchdog
+
+event_analyzer:
+  channels:
+    - Security
+    - System
+    - Microsoft-Windows-PowerShell/Operational
