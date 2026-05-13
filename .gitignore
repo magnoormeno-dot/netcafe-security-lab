@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local configuration and generated state
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+baseline*.json
+baseline*.sqlite
+alerts*.jsonl
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
