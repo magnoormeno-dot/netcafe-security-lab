@@ -1,0 +1,20 @@
+title: CafeSec Lab
+author: shine leek
+email: magnoormeno@gmail.com
+description: Independent research notes on internet cafe and gaming venue security
+url: ""
+baseurl: ""
+theme: minima
+future: true
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+
+minima:
+  skin: auto
+
+header_pages:
+  - about.md
+
+feed:
+  path: feed.xml
