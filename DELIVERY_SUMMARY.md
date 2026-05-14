@@ -68,15 +68,15 @@ unsigned_injector_patterns.yar: ok
 
 ## Manual Tasks Before Public Launch
 
-- Confirm the published GitHub URL matches `https://github.com/SIMAYI210/netcafe-security-lab`.
-- Create or confirm the GitHub organization/repository location for CafeSec Lab.
+- Published GitHub URL confirmed: `https://github.com/magnoormeno-dot/netcafe-security-lab`.
+- Repository location confirmed: `magnoormeno-dot/netcafe-security-lab`.
 - Add a real PGP key and Signal contact details to `.github/SECURITY.md` if those channels will be supported.
 - Review Dubai and UAE legal, privacy, CCTV, payment, and incident-reporting language with qualified local counsel.
 - Tune Sigma example service names, process names, and registry paths for the real billing software environment before production use.
 - Run the integrity monitor in a controlled pilot and document false positives.
 - Perform one real-world validation pass for the Windows host checklist in a Dubai-managed venue.
 - Confirm whether the future-dated blog article should remain dated `2026-05-20` or be moved to the actual publication date.
-- Decide whether to create a separate Git repository inside `netcafe-security-lab` or keep it within the current parent repository.
+- Maintain the standalone Git repository inside `netcafe-security-lab`; avoid committing unrelated parent-directory files.
 
 ## Suggested Links For A CVP Or Research Portfolio Application
 
