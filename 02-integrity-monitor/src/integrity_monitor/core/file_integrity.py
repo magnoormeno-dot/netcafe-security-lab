@@ -180,10 +180,12 @@ class FileIntegrityMonitor:
         records: list[FileRecord] = []
         findings: list[DetectionFinding] = []
         errors: dict[str, str] = {}
+        selected_baseline = self._resolve_baseline(baseline)
+        use_cache = selected_baseline is None
 
         for path in self.iter_files():
             try:
-                record = self.record_file(path)
+                record = self.record_file(path, use_cache=use_cache)
             except OSError as exc:
                 normalized = normalize_path(path)
                 errors[normalized] = str(exc)
@@ -194,18 +196,24 @@ class FileIntegrityMonitor:
 
         records.sort(key=lambda item: item.path)
         diff = None
-        selected_baseline = baseline
-        if selected_baseline is None and self.baseline_manager is not None:
-            try:
-                selected_baseline = self.baseline_manager.latest_version()
-            except FileNotFoundError:
-                selected_baseline = None
         if selected_baseline is not None and self.baseline_manager is not None:
             diff = self.baseline_manager.diff_records(selected_baseline, records)
         elif selected_baseline is not None:
             diff = BaselineManager("unused").diff_records(selected_baseline, records)
 
         return IntegrityScanResult(records=records, diff=diff, findings=findings, errors=errors)
+
+    def _resolve_baseline(self, baseline: BaselineVersion | None) -> BaselineVersion | None:
+        """Return the explicit or latest baseline for this scan."""
+
+        if baseline is not None:
+            return baseline
+        if self.baseline_manager is None:
+            return None
+        try:
+            return self.baseline_manager.latest_version()
+        except FileNotFoundError:
+            return None
 
     def iter_files(self) -> list[Path]:
         """Return sorted unique file paths for all configured targets."""
@@ -249,14 +257,19 @@ class FileIntegrityMonitor:
                 return False
         return not (path.is_symlink() and not self.follow_symlinks)
 
-    def record_file(self, path: str | Path) -> FileRecord:
+    def record_file(self, path: str | Path, *, use_cache: bool = True) -> FileRecord:
         """Create a file record, using the incremental cache when possible."""
 
         file_path = Path(path)
         stat = file_path.stat()
         normalized = normalize_path(file_path)
         cached = self._cache.get(normalized)
-        if cached and cached.size == stat.st_size and cached.mtime_ns == stat.st_mtime_ns:
+        if (
+            use_cache
+            and cached
+            and cached.size == stat.st_size
+            and cached.mtime_ns == stat.st_mtime_ns
+        ):
             hashes = dict(cached.hashes)
         else:
             hashes = self.hash_file(file_path)
