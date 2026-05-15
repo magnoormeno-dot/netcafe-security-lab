@@ -2,8 +2,8 @@ title: CafeSec Lab
 author: shine leek
 email: magnoormeno@gmail.com
 description: Independent research notes on internet cafe and gaming venue security
-url: ""
-baseurl: ""
+url: "https://magnoormeno-dot.github.io"
+baseurl: "/netcafe-security-lab"
 theme: minima
 future: true
 plugins:

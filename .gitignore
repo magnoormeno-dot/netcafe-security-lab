@@ -29,6 +29,12 @@ baseline*.json
 baseline*.sqlite
 alerts*.jsonl
 
+# Jekyll
+03-blog/_site/
+03-blog/.jekyll-cache/
+03-blog/.sass-cache/
+03-blog/.bundle/
+
 # Editors and operating systems
 .idea/
 .vscode/
