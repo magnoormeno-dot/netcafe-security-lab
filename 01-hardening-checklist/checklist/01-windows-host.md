@@ -385,6 +385,129 @@ For each venue audit, collect the following evidence without exposing customer d
 - Golden image hash and restoration exception list.
 - Central log collector confirmation for events 4624, 4625, 4688, 4697, 7034, 7035, 7036, 4657, and 1102.
 
+## Field Verification Command Pack
+
+The following read-only PowerShell collection pack is intended for a first-pass
+Dubai venue audit. Run it once on each representative host role: one customer
+client PC, one cashier workstation, the billing server, and any golden-image or
+restoration administration host. Do not collect customer identity documents,
+payment records, chat logs, browser content, or screenshots unless local counsel
+has confirmed a lawful basis and retention procedure.
+
+Create a per-host evidence directory:
+
+```powershell
+$Role = "client-pc-01" # client-pc, cashier, billing-server, image-builder
+$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$EvidenceRoot = Join-Path $env:PUBLIC "CafeSec-Windows-Audit-$Role-$Stamp"
+New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
+```
+
+Collect identity, privilege, and operating-system context:
+
+```powershell
+whoami /all | Out-File "$EvidenceRoot\whoami-all.txt"
+Get-ComputerInfo |
+  Select-Object CsName,OsName,OsVersion,OsBuildNumber,WindowsProductName,
+    WindowsVersion,OsArchitecture |
+  Export-Clixml "$EvidenceRoot\computer-info.xml"
+Get-LocalUser | Select-Object Name,Enabled,LastLogon |
+  Export-Csv "$EvidenceRoot\local-users.csv" -NoTypeInformation
+Get-LocalGroupMember -Group Administrators |
+  Select-Object Name,ObjectClass,PrincipalSource |
+  Export-Csv "$EvidenceRoot\local-administrators.csv" -NoTypeInformation
+```
+
+Collect service, startup, scheduled-task, and application-control state:
+
+```powershell
+Get-CimInstance Win32_Service |
+  Select-Object Name,DisplayName,State,StartMode,StartName,PathName |
+  Export-Csv "$EvidenceRoot\services.csv" -NoTypeInformation
+Get-CimInstance Win32_StartupCommand |
+  Select-Object Name,Command,User,Location |
+  Export-Csv "$EvidenceRoot\startup-commands.csv" -NoTypeInformation
+Get-ScheduledTask | Where-Object {$_.TaskPath -notlike "\Microsoft\*"} |
+  Select-Object TaskName,TaskPath,State |
+  Export-Csv "$EvidenceRoot\scheduled-tasks-non-microsoft.csv" -NoTypeInformation
+Get-AppLockerPolicy -Effective -Xml > "$EvidenceRoot\applocker-effective.xml" 2>$null
+Get-ChildItem "$env:windir\System32\CodeIntegrity\CiPolicies\Active" -ErrorAction SilentlyContinue |
+  Select-Object Name,FullName,Length,LastWriteTime |
+  Export-Csv "$EvidenceRoot\wdac-active-policies.csv" -NoTypeInformation
+```
+
+Collect Defender, ASR, firewall, DNS, proxy, and time state:
+
+```powershell
+Get-MpComputerStatus | Export-Clixml "$EvidenceRoot\defender-status.xml"
+Get-MpPreference |
+  Select-Object AttackSurfaceReductionRules_Ids,AttackSurfaceReductionRules_Actions,
+    EnableControlledFolderAccess,ControlledFolderAccessProtectedFolders,
+    ControlledFolderAccessAllowedApplications,PUAProtection |
+  Export-Clixml "$EvidenceRoot\defender-preferences.xml"
+Get-NetFirewallProfile |
+  Select-Object Name,Enabled,DefaultInboundAction,DefaultOutboundAction |
+  Export-Csv "$EvidenceRoot\firewall-profiles.csv" -NoTypeInformation
+Get-NetFirewallRule -Enabled True -Direction Inbound |
+  Select-Object DisplayName,Profile,Action,Enabled |
+  Export-Csv "$EvidenceRoot\inbound-firewall-rules.csv" -NoTypeInformation
+Get-DnsClientServerAddress | Export-Clixml "$EvidenceRoot\dns-client-servers.xml"
+netsh winhttp show proxy > "$EvidenceRoot\winhttp-proxy.txt"
+w32tm /query /status > "$EvidenceRoot\w32tm-status.txt"
+w32tm /query /source > "$EvidenceRoot\w32tm-source.txt"
+```
+
+Collect audit policy and recent event-log evidence without clearing or modifying
+logs:
+
+```powershell
+auditpol /get /category:* > "$EvidenceRoot\audit-policy.txt"
+wevtutil gl Security > "$EvidenceRoot\security-log-settings.txt"
+wevtutil gl System > "$EvidenceRoot\system-log-settings.txt"
+wevtutil qe Security /q:"*[System[(EventID=4624 or EventID=4625 or EventID=4688 or EventID=4697 or EventID=4657 or EventID=1102)]]" /c:50 /f:text > "$EvidenceRoot\security-events-sample.txt"
+wevtutil qe System /q:"*[System[(EventID=7034 or EventID=7035 or EventID=7036 or EventID=7045)]]" /c:50 /f:text > "$EvidenceRoot\system-service-events-sample.txt"
+Get-WinEvent -LogName "Microsoft-Windows-Windows Defender/Operational" -MaxEvents 50 -ErrorAction SilentlyContinue |
+  Select-Object TimeCreated,Id,ProviderName,Message |
+  Export-Csv "$EvidenceRoot\defender-events-sample.csv" -NoTypeInformation
+Get-WinEvent -LogName "Microsoft-Windows-CodeIntegrity/Operational" -MaxEvents 50 -ErrorAction SilentlyContinue |
+  Select-Object TimeCreated,Id,ProviderName,Message |
+  Export-Csv "$EvidenceRoot\codeintegrity-events-sample.csv" -NoTypeInformation
+```
+
+Collect file-protection evidence for billing, restoration, and security agent
+paths after replacing the sample paths with the venue's approved installation
+paths:
+
+```powershell
+$CriticalPaths = @(
+  "C:\Program Files\Billing",
+  "C:\Program Files\RestorationAgent",
+  "C:\Program Files\CafeSec"
+)
+foreach ($Path in $CriticalPaths) {
+  if (Test-Path -LiteralPath $Path) {
+    $SafeName = ($Path -replace "[:\\ ]", "_").Trim("_")
+    icacls $Path /save "$EvidenceRoot\acl-$SafeName.txt" /t /c
+    Get-ChildItem -LiteralPath $Path -Recurse -File -ErrorAction SilentlyContinue |
+      Where-Object {$_.Extension -in ".exe",".dll",".sys",".ps1",".bat",".cmd",".msi"} |
+      Get-FileHash -Algorithm SHA256 |
+      Export-Csv "$EvidenceRoot\hashes-$SafeName.csv" -NoTypeInformation
+  }
+}
+```
+
+Package and label the evidence:
+
+```powershell
+Compress-Archive -Path "$EvidenceRoot\*" -DestinationPath "$EvidenceRoot.zip" -Force
+Get-FileHash "$EvidenceRoot.zip" -Algorithm SHA256 |
+  Tee-Object -FilePath "$EvidenceRoot.zip.sha256.txt"
+```
+
+Treat the resulting archive as security-sensitive. Store it in the evidence
+zone defined in `00-threat-model.md`, restrict access to named administrators,
+and delete local temporary copies according to the venue retention policy.
+
 ## References
 
 - CafeSec Lab threat model foundation: `00-threat-model.md`
