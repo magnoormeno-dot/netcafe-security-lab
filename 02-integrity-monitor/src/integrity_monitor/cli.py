@@ -95,9 +95,7 @@ def baseline() -> None:
 
 
 @baseline.command("create")
-@click.option(
-    "--path", "paths", multiple=True, help="File, directory, or glob to baseline."
-)
+@click.option("--path", "paths", multiple=True, help="File, directory, or glob to baseline.")
 @click.option("--store", required=True, help="Baseline storage path (.json or .sqlite).")
 @click.option("--config", "config_path", help="Optional YAML configuration file.")
 @click.option("--hmac-key-file", help="File containing HMAC key bytes.")
@@ -154,9 +152,7 @@ def baseline_rollback(store: str, version_id: str, hmac_key_file: str | None) ->
 
 
 @main.command()
-@click.option(
-    "--path", "paths", multiple=True, help="File, directory, or glob to scan."
-)
+@click.option("--path", "paths", multiple=True, help="File, directory, or glob to scan.")
 @click.option("--store", required=True, help="Baseline storage path.")
 @click.option("--config", "config_path", help="Optional YAML configuration file.")
 @click.option("--hmac-key-file", help="File containing HMAC key bytes.")
