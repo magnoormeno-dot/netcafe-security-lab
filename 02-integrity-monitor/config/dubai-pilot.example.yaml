@@ -1,0 +1,51 @@
+# CafeSec Integrity Monitor pilot configuration for a Dubai gaming venue.
+# Copy this file to monitor.local.yaml and replace paths before use.
+
+targets:
+  - 'C:\Program Files\CafeBilling'
+  - 'C:\Program Files\CafeBilling\**\*.exe'
+  - 'C:\Program Files\CafeBilling\**\*.dll'
+  - 'C:\ProgramData\CafeBilling\config\*.json'
+  - 'C:\Program Files\RestorationAgent\**\*.exe'
+  - 'C:\Program Files\RestorationAgent\**\*.dll'
+
+excludes:
+  - '*.log'
+  - '*.tmp'
+  - '*\cache\*'
+  - '*\CrashDumps\*'
+  - '*\Telemetry\*'
+
+algorithms:
+  - sha256
+  - blake3
+
+alerting:
+  dedup_window_seconds: 900
+  file: 'C:\CafeSec\alerts.jsonl'
+
+process_monitor:
+  protected_process_keywords:
+    - billing
+    - cashier
+    - clientagent
+    - rollback
+    - restore
+    - watchdog
+
+event_analyzer:
+  channels:
+    - Security
+    - System
+    - Microsoft-Windows-PowerShell/Operational
+
+pilot:
+  venue_region: Dubai
+  host_roles:
+    - client-pc
+    - cashier-workstation
+    - billing-server
+  acceptance_criteria:
+    max_untriaged_file_changes_per_day: 0
+    max_untriaged_high_alerts_per_day: 0
+    required_successful_scan_days: 7

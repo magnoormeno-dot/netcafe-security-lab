@@ -1,6 +1,9 @@
 # Configuration
 
-`monitor.example.yaml` shows a conservative configuration for a Windows venue. The values are examples only. Replace paths, process keywords, alert destinations, and excluded cache paths with local values.
+`monitor.example.yaml` shows a conservative configuration for a Windows venue.
+`dubai-pilot.example.yaml` adds a more operational pilot template for a Dubai
+gaming venue. The values are examples only. Replace paths, process keywords,
+alert destinations, and excluded cache paths with local values.
 
 ## HMAC Key
 

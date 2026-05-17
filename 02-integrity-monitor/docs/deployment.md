@@ -4,6 +4,9 @@
 
 Deploy the monitor to one non-production host or a small pilot group before enabling broad alerting. Gaming venues have noisy software stacks, and every rule needs local context.
 
+For a field-ready one-week procedure, use `pilot-runbook.md` with
+`../config/dubai-pilot.example.yaml`.
+
 ## Recommended Windows Layout
 
 - Install path: `C:\CafeSec\IntegrityMonitor`
@@ -26,7 +29,7 @@ Run as a dedicated low-privilege monitoring account with read access to target p
 
 ```powershell
 integrity-monitor scan `
-  --path "C:\CafeBilling" `
+  --config "C:\CafeSec\monitor.local.yaml" `
   --store "C:\CafeSec\baseline.json" `
   --hmac-key-file "C:\CafeSec\baseline.hmac.key" `
   --alert-file "C:\CafeSec\alerts.jsonl"

@@ -96,7 +96,7 @@ def baseline() -> None:
 
 @baseline.command("create")
 @click.option(
-    "--path", "paths", multiple=True, required=True, help="File, directory, or glob to baseline."
+    "--path", "paths", multiple=True, help="File, directory, or glob to baseline."
 )
 @click.option("--store", required=True, help="Baseline storage path (.json or .sqlite).")
 @click.option("--config", "config_path", help="Optional YAML configuration file.")
@@ -155,7 +155,7 @@ def baseline_rollback(store: str, version_id: str, hmac_key_file: str | None) ->
 
 @main.command()
 @click.option(
-    "--path", "paths", multiple=True, required=True, help="File, directory, or glob to scan."
+    "--path", "paths", multiple=True, help="File, directory, or glob to scan."
 )
 @click.option("--store", required=True, help="Baseline storage path.")
 @click.option("--config", "config_path", help="Optional YAML configuration file.")
