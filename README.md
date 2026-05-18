@@ -3,10 +3,16 @@
 ![Status](https://img.shields.io/badge/status-active%20research-2ea44f)
 ![Research](https://img.shields.io/badge/focus-defensive%20security-0366d6)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+[![Integrity Monitor CI](https://github.com/magnoormeno-dot/netcafe-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/magnoormeno-dot/netcafe-security-lab/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/magnoormeno-dot/netcafe-security-lab?include_prereleases&label=release)](https://github.com/magnoormeno-dot/netcafe-security-lab/releases)
 
 CafeSec Lab is an independent defensive security research project for internet cafes, gaming venues, esports hotels, and managed shared-PC environments, with an initial operating focus on Dubai and the wider UAE market.
 
 The project exists to move venue billing and management systems from informal trust models toward security models that are observable, testable, and hardenable by small operators with limited budgets.
+
+Public research site: <https://magnoormeno-dot.github.io/netcafe-security-lab/>
+
+Current public preview: `v0.1.0-alpha`
 
 ## Mission
 
