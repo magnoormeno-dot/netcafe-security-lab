@@ -22,6 +22,17 @@ Recommended test flow:
 4. Run against a controlled malware or tooling corpus only in a lab.
 5. Tune alert severity before production deployment.
 
+## False Positive Handling
+
+Use `../tuning-guide.md` before downgrading YARA matches. A match from an
+approved signed vendor binary may be documented as expected only when publisher,
+hash, version, source, host role, and expiry are recorded.
+
+Do not tune away matches from customer-writable directories, removable media,
+temporary folders, game mod folders, or unknown support-tool downloads. In
+shared-PC venues, location and write permissions are often more important than a
+single static signature.
+
 ## References
 
 - YARA writing rules: https://yara.readthedocs.io/en/stable/writingrules.html

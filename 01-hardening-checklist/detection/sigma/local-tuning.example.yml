@@ -1,0 +1,66 @@
+version: 1
+scope: "Example local tuning register for a Dubai gaming venue"
+owner: "CafeSec Lab"
+status: example
+notes:
+  - "This file is not a Sigma rule. It documents local tuning decisions that should be implemented in the target SIEM after rule conversion."
+  - "Replace example users, paths, hashes, and ticket references before use."
+  - "Keep real venue-specific tuning data private if it contains internal hostnames, usernames, vendor names, or case details."
+
+tuning_entries:
+  - id: vendor-update-billing-service-restart
+    rule: billing_process_termination
+    decision: lower_severity
+    expires_utc: "2026-06-18T00:00:00Z"
+    host_roles:
+      - billing-server
+    required_context:
+      change_ticket: "CHG-2026-0001"
+      maintenance_window: "approved_vendor_update"
+      publisher_verified: true
+    match:
+      parent_image: 'C:\Program Files\ApprovedAdminTools\VendorUpdater.exe'
+      user: "svc_patch"
+    do_not_tune_if:
+      - "Command executed from a customer-writable path."
+      - "Binary signature is missing or does not match the approved publisher."
+      - "Billing audit logs show unexplained balance, session, or time changes."
+
+  - id: restoration-agent-maintenance-restart
+    rule: critical_service_disabled
+    decision: allow_with_ticket
+    expires_utc: "2026-05-25T00:00:00Z"
+    host_roles:
+      - client-pc
+    required_context:
+      change_ticket: "CHG-2026-0002"
+      maintenance_window: "restoration_policy_update"
+    match:
+      service_name_contains:
+        - "restore"
+        - "rollback"
+      event_ids:
+        - 7035
+        - 7036
+    do_not_tune_if:
+      - "Service stop is followed by missing restoration health checks."
+      - "The same event appears outside the maintenance window."
+      - "The event is near Security Event ID 1102 or central collector outage."
+
+  - id: protected-commercial-binary
+    rule: suspicious_packer_traits
+    decision: document_expected_match
+    expires_utc: "2026-08-18T00:00:00Z"
+    host_roles:
+      - cashier-workstation
+    required_context:
+      inventory_record: "INV-2026-0007"
+      publisher_verified: true
+      source_verified: true
+    match:
+      sha256: "REPLACE_WITH_APPROVED_HASH"
+      installed_path: 'C:\Program Files\CafeBilling'
+    do_not_tune_if:
+      - "File appears in Downloads, Temp, Desktop, removable media, or game mod folders."
+      - "Publisher, version, or hash changes without an approved maintenance record."
+      - "The file appears on a host role where the software is not expected."

@@ -22,6 +22,20 @@ Recommended validation:
 4. Run in low-severity or audit mode for at least one business week.
 5. Tune false positives by approved admin hosts, vendor support windows, and maintenance scripts.
 
+## Local Tuning
+
+Keep the Sigma source rules generic. Apply venue-specific filters after
+conversion to the target SIEM and record decisions in
+`../tuning-register.example.csv` or the venue ticketing system.
+
+Use `local-tuning.example.yml` as an operator-readable template for approved
+maintenance windows, service accounts, host roles, and expiry dates. It is not a
+Sigma rule and should not be loaded directly into a SIEM without conversion.
+
+Do not add broad suppressions for administrator accounts, PowerShell, billing
+servers, or vendor names. Those fields are useful pivots for triage, not safe
+allowlist boundaries by themselves.
+
 ## References
 
 - Sigma documentation: https://sigmahq.io/docs/

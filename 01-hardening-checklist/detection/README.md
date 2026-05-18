@@ -10,6 +10,8 @@ The rules are intentionally generic. They are designed to identify behavioral pa
 | --- | --- |
 | `yara/` | File and memory-oriented YARA rules for generic suspicious binary traits. |
 | `sigma/` | Windows event-log Sigma rules for service tampering, registry changes, and billing process disruption. |
+| `tuning-guide.md` | False-positive handling, tuning governance, and review workflow. |
+| `tuning-register.example.csv` | Minimum register fields for local tuning decisions. |
 
 ## Safety Principles
 
@@ -29,6 +31,9 @@ Useful first triage questions:
 - Is the binary signed by an expected publisher?
 - Did a billing, restoration, logging, or endpoint-protection service stop?
 - Was the event near a cashier adjustment, customer dispute, vendor support session, or physical anomaly?
+
+Use `tuning-guide.md` before suppressing or lowering severity for a rule. Tuning
+must be narrow, evidence-backed, owned by a named operator, and time-limited.
 
 ## References
 
