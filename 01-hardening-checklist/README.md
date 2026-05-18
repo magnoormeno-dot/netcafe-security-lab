@@ -1,6 +1,6 @@
 # CafeSec Lab Hardening Checklist
 
-This subproject contains the defensive baseline for internet cafes, gaming venues, esports hotels, and shared-PC environments. The first target environment is a Dubai-managed venue using Windows client PCs, one or more billing servers, cashier or reception workstations, restoration software, and a mixed wired/wireless network.
+This subproject contains the defensive baseline for internet cafes, gaming venues, esports hotels, and shared-PC environments. The controls are global in scope. The first public operator examples use a Dubai-managed venue model with Windows client PCs, one or more billing servers, cashier or reception workstations, restoration software, and a mixed wired/wireless network.
 
 The checklist is vendor-neutral. It is intended to help operators ask better questions, verify control state, and prioritize security work without publishing bypass techniques or tool-specific exploitation steps.
 
@@ -31,4 +31,4 @@ Every checklist item must be actionable by a defender and verifiable by an opera
 
 ## Non-Goals
 
-This project does not provide exploit instructions, bypass tools, or vendor-specific vulnerability claims. It also does not replace legal, insurance, or regulatory advice for Dubai, UAE, or any other jurisdiction.
+This project does not provide exploit instructions, bypass tools, or vendor-specific vulnerability claims. It also does not replace legal, insurance, or regulatory advice for Dubai, UAE, East Asia, or any other jurisdiction.

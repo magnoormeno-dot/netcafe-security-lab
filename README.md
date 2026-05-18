@@ -6,13 +6,15 @@
 [![Integrity Monitor CI](https://github.com/magnoormeno-dot/netcafe-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/magnoormeno-dot/netcafe-security-lab/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/magnoormeno-dot/netcafe-security-lab?include_prereleases&label=release)](https://github.com/magnoormeno-dot/netcafe-security-lab/releases)
 
-CafeSec Lab is an independent defensive security research project for internet cafes, gaming venues, esports hotels, and managed shared-PC environments, with an initial operating focus on Dubai and the wider UAE market.
+CafeSec Lab is an independent defensive security research project for internet cafes, gaming venues, esports hotels, and managed shared-PC environments. The project is global in scope, with public examples and pilot material currently written around Dubai/UAE operator use cases.
 
 The project exists to move venue billing and management systems from informal trust models toward security models that are observable, testable, and hardenable by small operators with limited budgets.
 
-Public research site: <https://magnoormeno-dot.github.io/netcafe-security-lab/>
+## Quick Links
 
-Current public preview: `v0.1.0-alpha`
+- Research blog: <https://magnoormeno-dot.github.io/netcafe-security-lab/>
+- Current public preview: [`v0.1.0-alpha`](https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.0-alpha)
+- Security policy: [`.github/SECURITY.md`](.github/SECURITY.md)
 
 ## Mission
 
@@ -45,7 +47,7 @@ CafeSec Lab focuses on defensive questions:
 - What telemetry should a low-cost SOC collect first?
 - How can vendors modernize trust boundaries, update mechanisms, and client-server integrity checks?
 
-The project does not provide legal advice. Operators in Dubai or any other jurisdiction should validate compliance obligations with qualified local counsel and their technology providers.
+The project does not provide legal advice. Operators in Dubai, East Asia, or any other jurisdiction should validate compliance obligations with qualified local counsel and their technology providers.
 
 ## What This Project Will Not Publish
 

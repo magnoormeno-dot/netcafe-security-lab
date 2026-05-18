@@ -2,7 +2,7 @@
 
 This document defines the baseline threat model for CafeSec Lab's hardening checklist. All later checklist files inherit these assumptions unless they explicitly state otherwise.
 
-The target environment is an internet cafe, gaming venue, esports hotel, or managed shared-PC site operating in Dubai or the wider UAE market. A typical deployment includes Windows client PCs, a billing server, cashier or reception workstations, restoration or "rollback" software, network equipment, guest Wi-Fi, administrative remote access, and business records used for revenue reconciliation.
+The target environment is an internet cafe, gaming venue, esports hotel, or managed shared-PC site. The model is global in scope, while the first public examples use Dubai/UAE operator assumptions. A typical deployment includes Windows client PCs, a billing server, cashier or reception workstations, restoration or "rollback" software, network equipment, guest Wi-Fi, administrative remote access, and business records used for revenue reconciliation.
 
 This document uses MITRE ATT&CK for technique naming, STRIDE for threat categories, and a simple risk matrix inspired by NIST risk-management practice. ATT&CK mappings are a defensive taxonomy, not a claim that every listed technique has been observed in a specific venue.
 
@@ -16,7 +16,7 @@ This document uses MITRE ATT&CK for technique naming, STRIDE for threat categori
 - Some software may be legacy, vendor-managed, or difficult to patch quickly.
 - Restoration systems may reset client state but do not automatically protect servers, cashier hosts, network devices, or cloud consoles.
 - Remote maintenance by vendors or contractors may exist.
-- Local legal and compliance obligations must be reviewed by qualified Dubai or UAE counsel where relevant.
+- Local legal and compliance obligations must be reviewed by qualified counsel in the relevant jurisdiction, including Dubai/UAE counsel where UAE examples are used.
 
 ## Assets
 
@@ -295,7 +295,7 @@ High-value Windows events for later checklists include:
 
 This threat model does not authorize testing against third-party venues, vendors, or networks. It does not include exploit steps, bypass tooling, or vendor-specific vulnerability claims.
 
-Detailed legal interpretation for Dubai, UAE, or other jurisdictions is out of scope. This project can identify security controls and evidence needs, but operators must validate legal obligations separately.
+Detailed legal interpretation for Dubai, UAE, East Asia, or other jurisdictions is out of scope. This project can identify security controls and evidence needs, but operators must validate legal obligations separately.
 
 ## Validation Plan
 
