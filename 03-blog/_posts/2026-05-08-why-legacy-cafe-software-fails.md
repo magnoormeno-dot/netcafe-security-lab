@@ -2,7 +2,7 @@
 layout: post
 title: "Why Legacy Cafe Management Software Fails Modern Threat Models"
 date: 2026-05-08
-author: shine leek
+author: CafeSec Lab
 categories: [research, architecture]
 ---
 

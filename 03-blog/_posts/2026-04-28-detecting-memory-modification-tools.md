@@ -2,7 +2,7 @@
 layout: post
 title: "Detection Strategies for Memory Modification Tools in Production Environments"
 date: 2026-04-28
-author: shine leek
+author: CafeSec Lab
 categories: [research, detection]
 ---
 

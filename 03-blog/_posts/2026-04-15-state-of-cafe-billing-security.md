@@ -2,7 +2,7 @@
 layout: post
 title: "The State of Internet Cafe Billing Security in 2026"
 date: 2026-04-15
-author: shine leek
+author: CafeSec Lab
 categories: [research, billing-security]
 ---
 

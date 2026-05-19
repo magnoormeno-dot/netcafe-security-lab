@@ -2,6 +2,7 @@
 layout: post
 title: "Restoration Systems Are Not Security Boundaries"
 date: 2026-05-18
+author: CafeSec Lab
 categories: [operations, hardening]
 tags: [restoration, windows-hardening, shared-pc, incident-response]
 ---

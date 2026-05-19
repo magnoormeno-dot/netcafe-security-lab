@@ -2,7 +2,7 @@
 layout: post
 title: "Building a Cafe SOC on a Budget"
 date: 2026-05-20
-author: shine leek
+author: CafeSec Lab
 categories: [research, soc]
 ---
 
