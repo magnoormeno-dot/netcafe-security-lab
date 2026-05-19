@@ -21,7 +21,7 @@ The repository publishes this directory through `.github/workflows/pages.yml`.
 The production URL is configured as:
 
 ```text
-https://cafeseclab.com/
+https://research.cafeseclab.com/
 ```
 
 Use `workflow_dispatch` for a manual rebuild after changing Pages settings, or push changes under `03-blog/` to trigger deployment automatically.

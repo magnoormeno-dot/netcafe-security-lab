@@ -12,7 +12,7 @@ The project exists to move venue billing and management systems from informal tr
 
 ## Quick Links
 
-- Research blog: <https://cafeseclab.com/>
+- Research blog: <https://research.cafeseclab.com/>
 - Current public release: [`v0.1.1`](https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.1)
 - Security policy: [`.github/SECURITY.md`](.github/SECURITY.md)
 
