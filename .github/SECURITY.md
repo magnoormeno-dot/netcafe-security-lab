@@ -15,7 +15,7 @@ Do not report vulnerabilities through public GitHub issues, discussions, pull re
 
 Preferred private channels:
 
-- Email: `magnoormeno@gmail.com`
+- Email: `research@cafeseclab.com`
 - PGP: public key pending publication. Until a key is published, send an initial contact request without exploit details.
 - Signal: available by prior email coordination for sensitive follow-up.
 

@@ -69,7 +69,7 @@ The disclosure process is aligned with the [CERT/CC Guide to Coordinated Vulnera
 
 ## Contact
 
-Primary contact: `magnoormeno@gmail.com`
+Primary contact: `research@cafeseclab.com`
 
 Public research identity: `CafeSec Lab Research Team`
 
