@@ -388,7 +388,7 @@ For each venue audit, collect the following evidence without exposing customer d
 ## Field Verification Command Pack
 
 The following read-only PowerShell collection pack is intended for a first-pass
-Dubai venue audit. Run it once on each representative host role: one customer
+venue audit. Run it once on each representative host role: one customer
 client PC, one cashier workstation, the billing server, and any golden-image or
 restoration administration host. Do not collect customer identity documents,
 payment records, chat logs, browser content, or screenshots unless local counsel

@@ -2,7 +2,7 @@
 layout: post
 title: "Building a Cafe SOC on a Budget"
 date: 2026-05-20
-author: CafeSec Lab
+author: CafeSec Lab Research Team
 categories: [research, soc]
 ---
 
@@ -27,6 +27,8 @@ File integrity monitoring fills a specific gap: did critical files change? The f
 The first detection set should be small and close to impact. Alert on billing or restoration service stop. Alert on Windows Security log clearing. Alert on billing database port access from client VLANs. Alert on cashier adjustments outside normal role or shift patterns. Alert on vendor remote access outside a support window. Alert on new executable files in billing directories. Alert on client agent check-in gaps. Alert on backup job failure. Alert on firewall rules changed without a ticket. These alerts are understandable to owners and managers because they map to business risk.
 
 A budget SOC should include a visible daily checklist. Did backups run? Did any billing services stop? Did any client agents miss check-ins? Did any cashier account perform unusual refunds or free-time grants? Did any vendor remote access occur? Did the firewall deny client-to-database traffic? Did any Security log clear events occur? Did any critical file hashes change? This checklist can be reviewed by a manager or contractor. It is not glamorous, but it creates accountability.
+
+We trust checklists that a busy venue manager can actually finish before the room fills up. If a control cannot survive peak-hour operations, it is not yet part of the operating model.
 
 Cost can be kept realistic. An initial open-source stack might use one small server or VM for Wazuh, a Windows Event Forwarding collector if needed, existing firewall logging, DNS resolver logging, and the CafeSec Integrity Monitor for critical paths. Hardware may be an existing spare business PC with redundant backups, or a small dedicated server if the venue has one. The largest cost is not software. It is time: documenting the network, tuning noise, responding to alerts, and maintaining the baseline after updates.
 
@@ -54,11 +56,11 @@ Building a cafe SOC on a budget is an exercise in restraint. Collect the logs th
 
 ## About this research
 
-CafeSec Lab develops defensive guidance and tooling for small shared-PC venues. The project favors practical monitoring patterns that operators can deploy, test, and explain.
+This research note is published by the CafeSec Lab Research Team. The project favors practical monitoring patterns that operators can deploy, test, and explain.
 
 ## Disclosure
 
-This article does not disclose any vendor vulnerability. It describes defensive monitoring architecture and open-source tooling patterns.
+No vendor product is evaluated here. The tooling references, including Wazuh and Sysmon, are open-source or publicly documented projects used as examples of defensive monitoring architecture.
 
 ## References
 

@@ -38,8 +38,8 @@ integrity-monitor scan --path "C:\CafeBilling" --store .\baseline.json --hmac-ke
 integrity-monitor verify --store .\baseline.json --hmac-key-file .\hmac.key
 ```
 
-For a role-based Dubai venue pilot, use
-`config/dubai-pilot.example.yaml` with `docs/pilot-runbook.md`.
+For a role-based venue pilot, use
+`config/venue-pilot.example.yaml` with `docs/pilot-runbook.md`.
 
 ## Safety Notes
 

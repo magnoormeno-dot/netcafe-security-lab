@@ -2,7 +2,7 @@
 
 This document defines the baseline threat model for CafeSec Lab's hardening checklist. All later checklist files inherit these assumptions unless they explicitly state otherwise.
 
-The target environment is an internet cafe, gaming venue, esports hotel, or managed shared-PC site. The model is global in scope, while the first public examples use Dubai/UAE operator assumptions. A typical deployment includes Windows client PCs, a billing server, cashier or reception workstations, restoration or "rollback" software, network equipment, guest Wi-Fi, administrative remote access, and business records used for revenue reconciliation.
+The target environment is an internet cafe, gaming venue, esports hotel, or managed shared-PC site. The model is global in scope and uses region-neutral operator assumptions. A typical deployment includes Windows client PCs, a billing server, cashier or reception workstations, restoration or "rollback" software, network equipment, guest Wi-Fi, administrative remote access, and business records used for revenue reconciliation.
 
 This document uses MITRE ATT&CK for technique naming, STRIDE for threat categories, and a simple risk matrix inspired by NIST risk-management practice. ATT&CK mappings are a defensive taxonomy, not a claim that every listed technique has been observed in a specific venue.
 
@@ -16,7 +16,7 @@ This document uses MITRE ATT&CK for technique naming, STRIDE for threat categori
 - Some software may be legacy, vendor-managed, or difficult to patch quickly.
 - Restoration systems may reset client state but do not automatically protect servers, cashier hosts, network devices, or cloud consoles.
 - Remote maintenance by vendors or contractors may exist.
-- Local legal and compliance obligations must be reviewed by qualified counsel in the relevant jurisdiction, including Dubai/UAE counsel where UAE examples are used.
+- Local legal and compliance obligations must be reviewed by qualified counsel in the relevant jurisdiction.
 
 ## Assets
 
@@ -295,7 +295,7 @@ High-value Windows events for later checklists include:
 
 This threat model does not authorize testing against third-party venues, vendors, or networks. It does not include exploit steps, bypass tooling, or vendor-specific vulnerability claims.
 
-Detailed legal interpretation for Dubai, UAE, East Asia, or other jurisdictions is out of scope. This project can identify security controls and evidence needs, but operators must validate legal obligations separately.
+Detailed legal interpretation for any jurisdiction is out of scope. This project can identify security controls and evidence needs, but operators must validate legal obligations separately.
 
 ## Validation Plan
 
@@ -333,4 +333,3 @@ Field validation should record:
 - NIST SP 800-61 Rev. 3, Incident Response Recommendations and Considerations for Cybersecurity Risk Management: https://csrc.nist.gov/pubs/sp/800/61/r3/final
 - Microsoft Security Compliance Toolkit and Windows security baselines: https://learn.microsoft.com/windows/security/operating-system-security/device-management/windows-security-configuration-framework/security-compliance-toolkit-10
 - CIS Benchmarks: https://www.cisecurity.org/cis-benchmarks
-- Dubai Electronic Security Center: https://www.desc.gov.ae/

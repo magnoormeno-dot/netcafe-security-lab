@@ -141,7 +141,7 @@ Feedback on the control model, detection tuning, and open-source project hygiene
 would be welcome.
 
 Regards,
-CafeSec Lab
+CafeSec Lab Research Team
 
 ## Manual Posting Checklist
 

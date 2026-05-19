@@ -6,7 +6,7 @@ The goal is to help venue staff make good first decisions: preserve evidence, co
 
 This document assumes the threat model in [`00-threat-model.md`](00-threat-model.md), the Windows host baseline in [`01-windows-host.md`](01-windows-host.md), the billing software baseline in [`02-billing-software.md`](02-billing-software.md), the network isolation baseline in [`03-network-isolation.md`](03-network-isolation.md), and the physical security baseline in [`04-physical-security.md`](04-physical-security.md).
 
-This document is not legal advice. Dubai and UAE reporting, evidence, privacy, labor, and payment obligations should be reviewed with qualified counsel and the appropriate authority or regulator.
+This document is not legal advice. Reporting, evidence, privacy, labor, and payment obligations should be reviewed with qualified counsel and the appropriate authority or regulator in the venue's jurisdiction.
 
 ## Threat Background
 
@@ -269,9 +269,9 @@ Relevant ATT&CK techniques include T1078 Valid Accounts, T1055 Process Injection
 
 - [ ] **IR-38: Consider legal, insurer, regulator, and authority notification for serious incidents.**
   - Risk: Data exposure, payment impact, extortion, theft, or customer harm may create reporting obligations.
-  - Recommended action: For SEV-1 or sensitive-data incidents, involve the owner, legal counsel, insurer, and appropriate local authority. In Dubai, public reporting paths may include Dubai Police eCrime services and the UAE Cybersecurity Council report-an-incident service, depending on incident type and business status.
+  - Recommended action: For SEV-1 or sensitive-data incidents, involve the owner, legal counsel, insurer, and appropriate local authority. Maintain a jurisdiction-specific contact list before incidents occur.
   - Verification: Incident record includes who was consulted, what decision was made, and when.
-  - References: Dubai Police eCrime services, UAE Cybersecurity Council resources, NIST SP 800-61 Rev. 3.
+  - References: NIST SP 800-61 Rev. 3, CISA incident response resources.
 
 - [ ] **IR-39: Use controlled communication with staff and customers.**
   - Risk: Rumors, blame, or premature claims can harm the investigation and the business.
@@ -420,7 +420,4 @@ Escalate beyond local staff when any of the following are true:
 - CERT/CC Coordinated Vulnerability Disclosure Guide: https://certcc.github.io/CERT-Guide-to-CVD/
 - OWASP Application Security Verification Standard: https://owasp.org/www-project-application-security-verification-standard/
 - OWASP Database Security Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html
-- Dubai Police eCrime service, as listed by the UAE Cybersecurity Council: https://www.ecrime.ae/
-- UAE Cybersecurity Council report an incident: https://csc.gov.ae/en/report-an-incident
-- Dubai Electronic Security Center incident reporting: https://www.desc.gov.ae/incident-reporting/
 - RFC 3227, Guidelines for Evidence Collection and Archiving: https://www.rfc-editor.org/rfc/rfc3227

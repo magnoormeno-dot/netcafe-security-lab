@@ -2,7 +2,7 @@
 layout: post
 title: "Restoration Systems Are Not Security Boundaries"
 date: 2026-05-18
-author: CafeSec Lab
+author: CafeSec Lab Research Team
 categories: [operations, hardening]
 tags: [restoration, windows-hardening, shared-pc, incident-response]
 ---
@@ -99,6 +99,10 @@ is where the real security posture lives.
 
 The dangerous pattern is not "there are exclusions." The dangerous pattern is
 "nobody can explain the exclusions."
+
+In restoration-heavy rooms, the exception list is often more revealing than the
+golden image itself. It shows where operational pressure has quietly rewritten
+the original security plan.
 
 An exception list should answer:
 
@@ -276,10 +280,9 @@ evidence to answer them.
 
 ## About This Research
 
-CafeSec Lab studies defensive controls for internet cafes, gaming venues,
-esports hotels, and managed shared-PC environments. This article is based on
-operational patterns common to restoration-heavy Windows fleets and is intended
-as defensive guidance for operators, vendors, and SOC teams.
+This research note is published by the CafeSec Lab Research Team. It is based
+on operational patterns common to restoration-heavy Windows fleets and is
+intended as defensive guidance for operators, vendors, and SOC teams.
 
 ## Disclosure
 

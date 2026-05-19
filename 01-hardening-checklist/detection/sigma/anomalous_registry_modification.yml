@@ -7,7 +7,7 @@ description: >
   AppLocker, and billing software configuration. In a gaming venue, these
   changes should be rare outside approved deployment or support windows and
   should be correlated with user, process, and host role.
-author: CafeSec Lab
+author: CafeSec Lab Research Team
 date: 2026/05/13
 license: MIT
 references:

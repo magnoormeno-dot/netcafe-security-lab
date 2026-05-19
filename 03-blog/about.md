@@ -12,7 +12,7 @@ The project exists to help small venue operators move from informal trust and re
 
 ## Research Position
 
-CafeSec Lab is maintained as an independent research identity rather than a vendor marketing channel. The research is written from a defender and operator perspective: customer-facing PCs are physically exposed, restoration systems are useful but incomplete controls, and billing infrastructure should be treated as business-critical control-plane software.
+CafeSec Lab is maintained by the CafeSec Lab Research Team as an independent research identity rather than a vendor marketing channel. The research is written from a defender and operator perspective: customer-facing PCs are physically exposed, restoration systems are useful but incomplete controls, and billing infrastructure should be treated as business-critical control-plane software.
 
 The maintainer background is intentionally described at a project level. The work draws on hands-on shared-PC operations, Windows fleet administration, billing-client deployment experience, and defensive security practice. Public writing avoids naming specific vendors unless responsible disclosure and legal review make that appropriate.
 

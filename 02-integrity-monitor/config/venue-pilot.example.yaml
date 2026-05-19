@@ -1,4 +1,4 @@
-# CafeSec Integrity Monitor pilot configuration for a Dubai gaming venue.
+# CafeSec Integrity Monitor pilot configuration for a shared-PC gaming venue.
 # Copy this file to monitor.local.yaml and replace paths before use.
 
 targets:
@@ -40,7 +40,7 @@ event_analyzer:
     - Microsoft-Windows-PowerShell/Operational
 
 pilot:
-  venue_region: Dubai
+  venue_region: region-neutral
   host_roles:
     - client-pc
     - cashier-workstation

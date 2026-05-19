@@ -6,4 +6,6 @@ The project publishes vendor-neutral hardening guidance, detection rules, and in
 
 Primary contact: `magnoormeno@gmail.com`
 
+Public research identity: `CafeSec Lab Research Team`
+
 Vulnerability reports must follow the private disclosure process in the repository security policy.

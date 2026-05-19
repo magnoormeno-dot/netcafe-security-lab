@@ -1,6 +1,6 @@
 version: 1
-scope: "Example local tuning register for a Dubai gaming venue"
-owner: "CafeSec Lab"
+scope: "Example local tuning register for a shared-PC gaming venue"
+owner: "CafeSec Lab Research Team"
 status: example
 notes:
   - "This file is not a Sigma rule. It documents local tuning decisions that should be implemented in the target SIEM after rule conversion."

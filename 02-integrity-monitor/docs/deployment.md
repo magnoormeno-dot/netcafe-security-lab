@@ -5,7 +5,7 @@
 Deploy the monitor to one non-production host or a small pilot group before enabling broad alerting. Gaming venues have noisy software stacks, and every rule needs local context.
 
 For a field-ready one-week procedure, use `pilot-runbook.md` with
-`../config/dubai-pilot.example.yaml`.
+`../config/venue-pilot.example.yaml`.
 
 ## Recommended Windows Layout
 

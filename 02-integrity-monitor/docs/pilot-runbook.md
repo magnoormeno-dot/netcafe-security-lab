@@ -1,7 +1,8 @@
-# Pilot Runbook For Dubai Gaming Venues
+# Pilot Runbook For Shared-PC Gaming Venues
 
 This runbook describes a conservative first deployment of CafeSec Integrity
-Monitor in a Dubai-managed internet cafe, gaming venue, or esports hotel. It is
+Monitor in an internet cafe, gaming venue, esports hotel, or managed shared-PC
+site. It is
 designed for a one-week pilot before broad rollout.
 
 The monitor is defensive and read-oriented. It should not modify billing
@@ -64,7 +65,7 @@ python -m pip install cafesec-integrity-monitor==0.1.0
 Copy the example configuration and replace vendor-specific paths:
 
 ```powershell
-Copy-Item .\config\dubai-pilot.example.yaml C:\CafeSec\monitor.local.yaml
+Copy-Item .\config\venue-pilot.example.yaml C:\CafeSec\monitor.local.yaml
 notepad C:\CafeSec\monitor.local.yaml
 ```
 
@@ -87,7 +88,7 @@ integrity-monitor baseline create `
   --config C:\CafeSec\monitor.local.yaml `
   --store C:\CafeSec\baseline.json `
   --hmac-key-file C:\CafeSec\baseline.hmac.key `
-  --metadata venue=dubai-pilot `
+  --metadata venue=venue-pilot `
   --metadata role=client-pc `
   --metadata approved_by=operator
 ```

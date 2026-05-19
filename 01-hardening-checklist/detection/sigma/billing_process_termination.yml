@@ -8,7 +8,7 @@ description: >
   vendor-neutral and should be tuned with local process names. It is useful in
   internet cafe and gaming venue environments where customer-facing hosts should
   not be able to stop business-control or evidence-generating processes.
-author: CafeSec Lab
+author: CafeSec Lab Research Team
 date: 2026/05/13
 license: MIT
 references:

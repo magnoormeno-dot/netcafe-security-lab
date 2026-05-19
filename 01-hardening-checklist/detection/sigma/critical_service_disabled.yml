@@ -7,7 +7,7 @@ description: >
   venue. Service stop, crash, disablement, or unexpected service installation
   should be correlated with process creation, user logon, vendor support, and
   billing software audit logs.
-author: CafeSec Lab
+author: CafeSec Lab Research Team
 date: 2026/05/13
 license: MIT
 references:

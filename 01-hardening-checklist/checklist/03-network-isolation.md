@@ -1,6 +1,6 @@
 # Network Isolation Checklist
 
-This checklist defines a network segmentation and traffic-control baseline for internet cafes, gaming venues, esports hotels, and managed shared-PC environments. It is written for a Dubai-operated venue model, but the controls are vendor-neutral and can be adapted to other jurisdictions.
+This checklist defines a network segmentation and traffic-control baseline for internet cafes, gaming venues, esports hotels, and managed shared-PC environments. It is written for a region-neutral venue model, and the controls are vendor-neutral so operators can adapt them to local law, vendors, and network constraints.
 
 The checklist assumes the threat model in [`00-threat-model.md`](00-threat-model.md), the Windows host baseline in [`01-windows-host.md`](01-windows-host.md), and the billing software baseline in [`02-billing-software.md`](02-billing-software.md). Client PCs are treated as untrusted. Billing servers, cashier workstations, backups, logs, network devices, and remote support paths require explicit network boundaries.
 

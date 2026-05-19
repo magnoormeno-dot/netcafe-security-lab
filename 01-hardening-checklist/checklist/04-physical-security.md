@@ -225,7 +225,7 @@ The defensive objective is not to create airport-grade physical security. The ob
 
 - [ ] **PS-32: Avoid recording sensitive screen content, payment keypad input, or private areas.**
   - Risk: Poor camera placement can create privacy, payment, and customer-trust problems.
-  - Recommended configuration: Aim cameras at physical movement and transaction context rather than close-up screen text, customer credentials, payment PIN pads, or private spaces. Validate Dubai or UAE legal requirements with qualified counsel.
+  - Recommended configuration: Aim cameras at physical movement and transaction context rather than close-up screen text, customer credentials, payment PIN pads, or private spaces. Validate local privacy, labor, and surveillance requirements with qualified counsel.
   - Verification: Review camera footage and confirm it does not routinely capture passwords, payment card data, payment PIN entry, or private areas.
   - References: NIST Privacy Framework, PCI DSS awareness for payment environments, local legal review.
 
