@@ -4,7 +4,11 @@ CafeSec Lab is an independent defensive security research project for internet c
 
 The project publishes vendor-neutral hardening guidance, detection rules, and integrity monitoring tools for operators who need practical security improvements without enterprise budgets.
 
-Primary contact: `research@cafeseclab.com`
+Research contact: `research@cafeseclab.com`
+
+General inquiries: `contact@cafeseclab.com`
+
+Security and vulnerability disclosure: `security@cafeseclab.com`
 
 Public research identity: `CafeSec Lab Research Team`
 

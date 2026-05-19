@@ -32,4 +32,4 @@ Do not include live targets, vendor secrets, customer names, screenshots of priv
 
 Maintainers may edit, reject, hide, or remove contributions that violate this policy. Repeated or severe violations may result in a ban from the project spaces.
 
-To report conduct concerns, contact `research@cafeseclab.com`. For vulnerability reports, use the process in [`.github/SECURITY.md`](.github/SECURITY.md) instead of this channel.
+To report conduct concerns, contact `contact@cafeseclab.com`. For vulnerability reports, use the process in [`.github/SECURITY.md`](.github/SECURITY.md) instead of this channel.

@@ -69,7 +69,11 @@ The disclosure process is aligned with the [CERT/CC Guide to Coordinated Vulnera
 
 ## Contact
 
-Primary contact: `research@cafeseclab.com`
+Research contact: `research@cafeseclab.com`
+
+General inquiries: `contact@cafeseclab.com`
+
+Security and vulnerability disclosure: `security@cafeseclab.com`
 
 Public research identity: `CafeSec Lab Research Team`
 

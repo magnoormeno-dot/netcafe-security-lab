@@ -22,6 +22,8 @@ CafeSec Lab does not publish billing bypass tools, exploit chains, credentials, 
 
 ## Contact
 
-Primary contact: `research@cafeseclab.com`
+Research contact: `research@cafeseclab.com`
 
-For vulnerability reports or sensitive operational details, do not open a public issue. Use the private reporting guidance in the repository security policy.
+General inquiries: `contact@cafeseclab.com`
+
+For vulnerability reports or sensitive operational details, do not open a public issue. Send an initial private notice to `security@cafeseclab.com` and use the private reporting guidance in the repository security policy.
