@@ -49,6 +49,10 @@ CafeSec Lab focuses on defensive questions:
 
 The project does not provide legal advice. Operators in any jurisdiction should validate compliance obligations with qualified local counsel and their technology providers.
 
+## External Verification
+
+The CafeSec Lab maintainer has completed OpenAI trusted access identity verification for authorized security work. This provides an external trust signal for legitimate defensive research workflows while the project continues to welcome additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities.
+
 ## What This Project Will Not Publish
 
 CafeSec Lab does not publish weaponized proof-of-concept code, bypass tools, exploit chains, credential material, or step-by-step abuse instructions for venue billing systems. When an attack pattern is discussed, the corresponding detection, mitigation, and validation guidance must appear with it.

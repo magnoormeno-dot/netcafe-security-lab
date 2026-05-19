@@ -16,6 +16,10 @@ CafeSec Lab is maintained by the CafeSec Lab Research Team as an independent res
 
 The maintainer background is intentionally described at a project level. The work draws on hands-on shared-PC operations, Windows fleet administration, billing-client deployment experience, and defensive security practice. Public writing avoids naming specific vendors unless responsible disclosure and legal review make that appropriate.
 
+## Verification
+
+The CafeSec Lab maintainer has completed OpenAI trusted access identity verification for authorized security work. This provides an external trust signal for legitimate defensive research workflows while the project continues to welcome additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities.
+
 ## Responsible Boundaries
 
 CafeSec Lab does not publish billing bypass tools, exploit chains, credentials, weaponized proof-of-concept code, or irresponsible vendor accusations. When attack patterns are discussed, they are paired with detection, mitigation, or validation guidance.
