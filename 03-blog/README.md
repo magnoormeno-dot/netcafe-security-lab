@@ -4,6 +4,8 @@ This directory contains the Jekyll blog for CafeSec Lab.
 
 The blog is written in English and focuses on defensive research for internet cafes, gaming venues, esports hotels, and managed shared-PC environments.
 
+`EDITORIAL_PLAN.md` tracks future v0.2 article formats so the public research notes do not all use the same essay structure.
+
 ## Local Preview
 
 ```bash

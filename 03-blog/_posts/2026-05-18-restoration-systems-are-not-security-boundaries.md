@@ -97,8 +97,7 @@ anti-cheat components, driver caches, billing configuration, local logs, and
 launcher state may need to survive reboot. In many venues, the exception list
 is where the real security posture lives.
 
-The dangerous pattern is not "there are exclusions." The dangerous pattern is
-"nobody can explain the exclusions."
+The dangerous pattern appears when nobody can explain the exclusions.
 
 In restoration-heavy rooms, the exception list is often more revealing than the
 golden image itself. It shows where operational pressure has quietly rewritten
@@ -154,8 +153,8 @@ A defensible image process should include:
 
 This does not require enterprise tooling on day one. Even a simple build record
 with hashes, screenshots of key settings, and exported service/policy state is
-better than memory. The important shift is cultural: the image is not just "the
-working install." It is the root of trust for the client fleet.
+better than memory. The important shift is cultural: the image becomes the root
+of trust for the client fleet, not merely "the working install."
 
 ## Server Trust Is The Hard Boundary
 
@@ -182,8 +181,8 @@ event, not a truth source.
 
 ## Evidence Must Survive Reboot
 
-The most common operational failure is not that the venue lacks logs. It is that
-logs exist only on the system that gets restored, overwritten, or reimaged.
+The most common operational failure is that logs exist only on the system that
+gets restored, overwritten, or reimaged.
 
 For a restoration-heavy environment, evidence should leave the client quickly.
 At minimum, a pilot should preserve:
@@ -255,9 +254,9 @@ verify. Useful features include:
   all active after reboot;
 - integration hooks for integrity monitoring.
 
-The best vendor experience is not one where the operator is told to trust the
-client. It is one where the operator can verify the client returned to the
-approved state, and can still investigate what happened before the reboot.
+The best vendor experience lets the operator verify that the client returned to
+the approved state while preserving enough evidence to investigate what
+happened before the reboot.
 
 ## Conclusion
 
@@ -265,14 +264,14 @@ Restoration systems are essential in shared-PC venues. They make the business
 operable. They reduce support burden. They help customers receive a consistent
 machine at the start of a session.
 
-But they should not be asked to do a job they cannot do alone. A reset is not a
-log. A clean reboot is not proof of a clean session. A golden image is not
-automatically a secure image. An exception list is not harmless just because the
-product calls it an exception.
+But they should not be asked to do a job they cannot do alone. A reset produces
+recovery, not an incident timeline. A clean reboot cannot prove that the live
+session was clean. A golden image still needs security review, and an exception
+list still needs ownership.
 
-The right approach is not to remove restoration. The right approach is to
-measure it, constrain it, monitor it, and surround it with controls that operate
-before, during, and after the reset.
+The right approach is to keep restoration in the architecture while measuring
+it, constraining it, monitoring it, and surrounding it with controls that
+operate before, during, and after the reset.
 
 For small operators, that is a realistic path. It does not require buying a
 large SOC on day one. It requires asking better questions and preserving enough
