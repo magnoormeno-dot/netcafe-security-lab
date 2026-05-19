@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import subprocess
+from base64 import b64encode
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -180,14 +181,15 @@ class WindowsSignatureVerifier:
 
         if not is_windows():
             return "unsupported"
+        encoded_command = self._encoded_status_command(path)
         try:
             completed = subprocess.run(
                 [
                     "powershell",
                     "-NoProfile",
                     "-NonInteractive",
-                    "-Command",
-                    f"(Get-AuthenticodeSignature -LiteralPath '{path}').Status",
+                    "-EncodedCommand",
+                    encoded_command,
                 ],
                 capture_output=True,
                 text=True,
@@ -199,6 +201,21 @@ class WindowsSignatureVerifier:
             return "unknown"
         status = completed.stdout.strip()
         return status or "unknown"
+
+    @staticmethod
+    def _encoded_status_command(path: str) -> str:
+        """Return a PowerShell EncodedCommand that avoids path interpolation."""
+
+        path_bytes = b64encode(path.encode("utf-8")).decode("ascii")
+        script = "\n".join(
+            [
+                "$ErrorActionPreference = 'Stop'",
+                f"$PathBytes = [Convert]::FromBase64String('{path_bytes}')",
+                "$LiteralPath = [Text.Encoding]::UTF8.GetString($PathBytes)",
+                "(Get-AuthenticodeSignature -LiteralPath $LiteralPath).Status",
+            ]
+        )
+        return b64encode(script.encode("utf-16le")).decode("ascii")
 
 
 class ProcessMonitor:

@@ -297,3 +297,22 @@ def test_signature_verifier_handles_powershell_failure(
     monkeypatch.setattr("integrity_monitor.core.process_monitor.subprocess.run", fake_run)
 
     assert WindowsSignatureVerifier().verify("agent.exe") == "unknown"
+
+
+def test_signature_verifier_uses_encoded_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_monitor_module, "is_windows", lambda: True)
+    captured_args: list[str] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured_args.extend(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="Valid\n", stderr="")
+
+    monkeypatch.setattr("integrity_monitor.core.process_monitor.subprocess.run", fake_run)
+    raw_path = "C:\\Temp\\bad' ; Stop-Service WinDefend ; '.exe"
+
+    status = WindowsSignatureVerifier().verify(raw_path)
+
+    assert status == "Valid"
+    assert "-EncodedCommand" in captured_args
+    assert "-Command" not in captured_args
+    assert raw_path not in " ".join(captured_args)

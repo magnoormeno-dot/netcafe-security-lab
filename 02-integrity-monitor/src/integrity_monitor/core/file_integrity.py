@@ -199,7 +199,7 @@ class FileIntegrityMonitor:
         if selected_baseline is not None and self.baseline_manager is not None:
             diff = self.baseline_manager.diff_records(selected_baseline, records)
         elif selected_baseline is not None:
-            diff = BaselineManager("unused").diff_records(selected_baseline, records)
+            diff = BaselineManager.compare_records(selected_baseline, records)
 
         return IntegrityScanResult(records=records, diff=diff, findings=findings, errors=errors)
 

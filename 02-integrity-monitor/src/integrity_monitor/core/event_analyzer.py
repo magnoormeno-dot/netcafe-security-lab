@@ -6,6 +6,7 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
@@ -162,10 +163,14 @@ class EventAnalyzer:
         *,
         critical_keywords: set[str] | None = None,
         suspicious_processes: set[str] | None = None,
+        failed_login_burst_threshold: int = 5,
+        failed_login_burst_window_minutes: int = 10,
     ) -> None:
         """Initialize the analyzer."""
 
         self.provider = provider or WindowsEventProvider()
+        self.failed_login_burst_threshold = failed_login_burst_threshold
+        self.failed_login_burst_window = timedelta(minutes=failed_login_burst_window_minutes)
         self.critical_keywords = {
             item.lower()
             for item in (
@@ -200,14 +205,16 @@ class EventAnalyzer:
     def analyze(self) -> list[EventFinding]:
         """Analyze provider events and return findings."""
 
+        events = self.provider.events()
         findings: list[EventFinding] = []
-        for event in self.provider.events():
+        for event in events:
             findings.extend(self._analyze_event(event))
+        findings.extend(self._detect_failed_login_bursts(events))
         return findings
 
     def _analyze_event(self, event: EventRecord) -> list[EventFinding]:
         checks = [
-            self._detect_failed_login_burst,
+            self._detect_failed_login_observed,
             self._detect_suspicious_process_creation,
             self._detect_service_install_or_change,
             self._detect_registry_modification,
@@ -220,7 +227,7 @@ class EventAnalyzer:
                 findings.append(finding)
         return findings
 
-    def _detect_failed_login_burst(self, event: EventRecord) -> EventFinding | None:
+    def _detect_failed_login_observed(self, event: EventRecord) -> EventFinding | None:
         if event.event_id != self.LOGIN_FAILURE:
             return None
         return EventFinding(
@@ -230,6 +237,80 @@ class EventAnalyzer:
             description="A failed logon event was observed and should be correlated for bursts.",
             event=event,
             evidence={"user": event.user, "data": event.data},
+        )
+
+    def _detect_failed_login_bursts(self, events: list[EventRecord]) -> list[EventFinding]:
+        """Detect repeated failed logons by host, user, and source address."""
+
+        grouped: dict[tuple[str, str, str], list[tuple[datetime | None, int, EventRecord]]] = {}
+        for index, event in enumerate(events):
+            if event.event_id != self.LOGIN_FAILURE:
+                continue
+            key = self._failed_login_group_key(event)
+            grouped.setdefault(key, []).append(
+                (self._parse_timestamp(event.timestamp), index, event)
+            )
+
+        findings: list[EventFinding] = []
+        for key, group in grouped.items():
+            if len(group) < self.failed_login_burst_threshold:
+                continue
+            ordered = sorted(
+                group,
+                key=lambda item: (item[0] is None, item[0] or datetime.min, item[1]),
+            )
+            finding = self._failed_login_burst_for_group(key, ordered)
+            if finding is not None:
+                findings.append(finding)
+        return findings
+
+    def _failed_login_burst_for_group(
+        self,
+        key: tuple[str, str, str],
+        events: list[tuple[datetime | None, int, EventRecord]],
+    ) -> EventFinding | None:
+        if any(timestamp is None for timestamp, _index, _event in events):
+            burst_events = events[: self.failed_login_burst_threshold]
+        else:
+            burst_events = []
+            for start_index, (start_time, _index, _event) in enumerate(events):
+                if start_time is None:
+                    continue
+                window_end = start_time + self.failed_login_burst_window
+                candidates = [
+                    item
+                    for item in events[start_index:]
+                    if item[0] is not None and item[0] <= window_end
+                ]
+                if len(candidates) >= self.failed_login_burst_threshold:
+                    burst_events = candidates[: self.failed_login_burst_threshold]
+                    break
+        if len(burst_events) < self.failed_login_burst_threshold:
+            return None
+
+        first_time = burst_events[0][0]
+        last_time = burst_events[-1][0]
+        event = burst_events[-1][2]
+        computer, user, source_address = key
+        return EventFinding(
+            rule_id="event.failed_logon_burst",
+            severity="medium",
+            title="Repeated failed logons observed",
+            description=(
+                "Multiple failed logons for the same host, user, and source address "
+                "were observed inside the configured burst window."
+            ),
+            event=event,
+            evidence={
+                "computer": computer,
+                "user": user,
+                "source_address": source_address,
+                "count": len(burst_events),
+                "threshold": self.failed_login_burst_threshold,
+                "window_minutes": int(self.failed_login_burst_window.total_seconds() // 60),
+                "first_seen": None if first_time is None else first_time.isoformat(),
+                "last_seen": None if last_time is None else last_time.isoformat(),
+            },
         )
 
     def _detect_suspicious_process_creation(self, event: EventRecord) -> EventFinding | None:
@@ -311,3 +392,36 @@ class EventAnalyzer:
         values = [event.message, event.source, event.channel, event.user or ""]
         values.extend(str(value) for value in event.data.values())
         return " ".join(values).lower()
+
+    @staticmethod
+    def _failed_login_group_key(event: EventRecord) -> tuple[str, str, str]:
+        user = event.user or str(
+            event.data.get("TargetUserName")
+            or event.data.get("SubjectUserName")
+            or event.data.get("AccountName")
+            or ""
+        )
+        source_address = str(
+            event.data.get("IpAddress")
+            or event.data.get("SourceNetworkAddress")
+            or event.data.get("WorkstationName")
+            or ""
+        )
+        return (event.computer, user, source_address)
+
+    @staticmethod
+    def _parse_timestamp(value: str | None) -> datetime | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if normalized.endswith("Z"):
+            normalized = f"{normalized[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed

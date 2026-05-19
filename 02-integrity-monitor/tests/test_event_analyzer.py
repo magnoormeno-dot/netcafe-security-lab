@@ -175,6 +175,34 @@ def test_event_analyzer_detects_failed_login() -> None:
     assert findings[0].evidence["user"] == "cashier"
 
 
+def test_event_analyzer_detects_failed_login_burst() -> None:
+    events = [
+        EventRecord(
+            event_id=4625,
+            source="Security",
+            channel="Security",
+            computer="CLIENT-01",
+            timestamp=f"2026-05-20T10:0{index}:00Z",
+            user="cashier",
+            data={"IpAddress": "10.10.20.55"},
+        )
+        for index in range(5)
+    ]
+    analyzer = EventAnalyzer(
+        provider=FakeEventProvider(events),
+        failed_login_burst_threshold=5,
+        failed_login_burst_window_minutes=10,
+    )
+
+    findings = analyzer.analyze()
+
+    burst = next(finding for finding in findings if finding.rule_id == "event.failed_logon_burst")
+    assert burst.severity == "medium"
+    assert burst.evidence["count"] == 5
+    assert burst.evidence["user"] == "cashier"
+    assert burst.evidence["source_address"] == "10.10.20.55"
+
+
 def test_event_analyzer_detects_suspicious_process_creation() -> None:
     event = EventRecord(
         event_id=4688,

@@ -262,6 +262,15 @@ class BaselineManager:
         """Compare a baseline with current file records."""
 
         self.require_valid(baseline)
+        return self.compare_records(baseline, current_records)
+
+    @staticmethod
+    def compare_records(
+        baseline: BaselineVersion,
+        current_records: list[FileRecord],
+    ) -> BaselineDiff:
+        """Compare baseline records with current file records without storage access."""
+
         current = {record.path: record for record in current_records}
         baseline_paths = set(baseline.records)
         current_paths = set(current)
