@@ -54,7 +54,7 @@ rule CafeSec_Suspicious_Packer_Traits
 {
     meta:
         description = "Detects generic PE packer traits relevant to shared-PC venue triage"
-        author = "CafeSec Lab"
+        author = "CafeSec Lab Research Team"
         license = "MIT"
         date = "2026-05-13"
         status = "experimental"

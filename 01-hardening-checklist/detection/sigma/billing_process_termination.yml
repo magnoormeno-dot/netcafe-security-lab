@@ -58,6 +58,11 @@ detection:
     ParentImage|contains:
       - '\Program Files\ApprovedAdminTools\'
       - '\Windows\System32\services.exe'
+  # Local tuning warning:
+  # Do not add broad username filters such as "admin", "operator", or
+  # placeholder service accounts to this rule. If a local User or
+  # SubjectUserName filter is required, use exact named maintenance accounts,
+  # require a ticketed support window, and review the exception regularly.
   condition: selection_tools and selection_termination_args and selection_venue_targets and not filter_approved_admin_paths
 fields:
   - UtcTime

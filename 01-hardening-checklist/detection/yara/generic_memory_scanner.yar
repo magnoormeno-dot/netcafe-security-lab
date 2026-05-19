@@ -59,7 +59,7 @@ rule CafeSec_Generic_Memory_Scanner_Behavior
 {
     meta:
         description = "Detects generic memory scanning traits in Windows PE files"
-        author = "CafeSec Lab"
+        author = "CafeSec Lab Research Team"
         license = "MIT"
         date = "2026-05-13"
         status = "experimental"
@@ -74,12 +74,10 @@ rule CafeSec_Generic_Memory_Scanner_Behavior
         $api_process32_first = "Process32First" ascii wide
         $api_process32_next = "Process32Next" ascii wide
 
-        $scan_text_1 = "first scan" ascii wide nocase
-        $scan_text_2 = "next scan" ascii wide nocase
-        $scan_text_3 = "exact value" ascii wide nocase
-        $scan_text_4 = "increased value" ascii wide nocase
-        $scan_text_5 = "decreased value" ascii wide nocase
-        $scan_text_6 = "unknown initial value" ascii wide nocase
+        $scan_text_1 = "exact value" ascii wide nocase
+        $scan_text_2 = "increased value" ascii wide nocase
+        $scan_text_3 = "decreased value" ascii wide nocase
+        $scan_text_4 = "unknown initial value" ascii wide nocase
 
         $cmp_1 = "float" ascii wide nocase
         $cmp_2 = "double" ascii wide nocase

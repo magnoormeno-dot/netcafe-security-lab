@@ -54,7 +54,7 @@ rule CafeSec_Unsigned_Process_Injection_Traits
 {
     meta:
         description = "Detects unsigned PE files with generic process injection imports"
-        author = "CafeSec Lab"
+        author = "CafeSec Lab Research Team"
         license = "MIT"
         date = "2026-05-13"
         status = "experimental"
