@@ -8,8 +8,8 @@ field certification.
 ## Primary Links
 
 - Repository: https://github.com/magnoormeno-dot/netcafe-security-lab
-- Research blog: https://magnoormeno-dot.github.io/netcafe-security-lab/
-- Initial release: https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.0
+- Research blog: https://cafeseclab.com/
+- Initial release: https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.1
 
 ## One-Sentence Description
 
@@ -34,7 +34,7 @@ The work is defensive-only. It does not publish bypass tools, exploit chains, or
 vendor-specific vulnerability claims.
 
 Repository: https://github.com/magnoormeno-dot/netcafe-security-lab
-Blog: https://magnoormeno-dot.github.io/netcafe-security-lab/
+Blog: https://cafeseclab.com/
 
 Feedback from venue operators, blue-team practitioners, and software vendors is
 welcome.
@@ -69,7 +69,7 @@ I am especially interested in feedback from:
 - Windows hardening practitioners;
 - billing or venue-management software vendors.
 
-Research notes: https://magnoormeno-dot.github.io/netcafe-security-lab/
+Research notes: https://cafeseclab.com/
 
 ## X Draft
 

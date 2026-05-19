@@ -2,8 +2,8 @@ title: CafeSec Lab
 author: CafeSec Lab Research Team
 email: contact@cafeseclab.com
 description: Independent research notes on internet cafe and gaming venue security
-url: "https://magnoormeno-dot.github.io"
-baseurl: "/netcafe-security-lab"
+url: "https://cafeseclab.com"
+baseurl: ""
 theme: minima
 future: true
 plugins:
