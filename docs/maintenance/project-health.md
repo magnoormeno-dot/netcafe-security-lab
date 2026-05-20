@@ -8,9 +8,11 @@ with its defensive-security boundaries.
 
 Use these links as the current public identity chain for the project:
 
+- Project home: <https://cafeseclab.com/>
 - Repository: <https://github.com/magnoormeno-dot/netcafe-security-lab>
 - Research site: <https://research.cafeseclab.com/>
 - Latest release: <https://github.com/magnoormeno-dot/netcafe-security-lab/releases>
+- Root site repository: <https://github.com/magnoormeno-dot/cafeseclab.com>
 - Security contact: `security@cafeseclab.com`
 - Research contact: `research@cafeseclab.com`
 - General contact: `contact@cafeseclab.com`
@@ -48,7 +50,11 @@ Validate the public web and mail identity whenever DNS, Pages, or contact text
 changes.
 
 ```powershell
+Resolve-DnsName cafeseclab.com -Type A
+Resolve-DnsName www.cafeseclab.com -Type CNAME
 Resolve-DnsName research.cafeseclab.com -Type CNAME
+(Invoke-WebRequest -UseBasicParsing https://cafeseclab.com/).StatusCode
+(Invoke-WebRequest -UseBasicParsing https://cafeseclab.com/.well-known/security.txt).StatusCode
 (Invoke-WebRequest -UseBasicParsing https://research.cafeseclab.com/).StatusCode
 (Invoke-WebRequest -UseBasicParsing https://research.cafeseclab.com/about/).StatusCode
 (Invoke-WebRequest -UseBasicParsing https://research.cafeseclab.com/feed.xml).StatusCode
@@ -59,6 +65,7 @@ Manual checks:
 - send a test message to `research@cafeseclab.com`;
 - send a test message to `security@cafeseclab.com`;
 - confirm Cloudflare Email Routing shows all role addresses as active;
+- confirm GitHub Pages still enforces HTTPS for `cafeseclab.com`;
 - confirm GitHub Pages still enforces HTTPS for `research.cafeseclab.com`.
 
 ## Integrity Monitor Quality Gate
@@ -101,8 +108,8 @@ Before publishing or promoting a post, check that the writing:
 - does not imply vendor endorsement or OpenAI endorsement;
 - pairs threat discussion with mitigation, detection, or validation guidance;
 - uses `CafeSec Lab Research Team` consistently as the public research identity;
-- points readers to `https://research.cafeseclab.com/` and role-based email
-  addresses.
+- points readers to `https://cafeseclab.com/`,
+  `https://research.cafeseclab.com/`, and role-based email addresses.
 
 Keep outreach modest. One thoughtful post in one community is better than broad
 cross-posting without follow-up capacity.

@@ -7,6 +7,7 @@ field certification.
 
 ## Primary Links
 
+- Project home: https://cafeseclab.com/
 - Repository: https://github.com/magnoormeno-dot/netcafe-security-lab
 - Research blog: https://research.cafeseclab.com/
 - Initial release: https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.1
@@ -34,6 +35,7 @@ The work is defensive-only. It does not publish bypass tools, exploit chains, or
 vendor-specific vulnerability claims.
 
 Repository: https://github.com/magnoormeno-dot/netcafe-security-lab
+Project home: https://cafeseclab.com/
 Blog: https://research.cafeseclab.com/
 
 Feedback from venue operators, blue-team practitioners, and software vendors is
@@ -70,6 +72,7 @@ I am especially interested in feedback from:
 - billing or venue-management software vendors.
 
 Research notes: https://research.cafeseclab.com/
+Project home: https://cafeseclab.com/
 
 ## X Draft
 

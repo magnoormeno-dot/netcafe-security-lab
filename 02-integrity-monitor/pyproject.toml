@@ -51,7 +51,8 @@ dev = [
 integrity-monitor = "integrity_monitor.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/magnoormeno-dot/netcafe-security-lab"
+Homepage = "https://cafeseclab.com/"
+Documentation = "https://research.cafeseclab.com/"
 Repository = "https://github.com/magnoormeno-dot/netcafe-security-lab"
 
 [tool.setuptools.packages.find]
