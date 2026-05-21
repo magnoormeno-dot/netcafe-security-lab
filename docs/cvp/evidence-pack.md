@@ -114,6 +114,8 @@ Default data policy:
 | Project governance | `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, MIT license |
 | Quality controls | GitHub Actions CI for Ruff, mypy, pytest, and coverage artifacts |
 | Roadmap | `docs/roadmap/project-goal.md` and `docs/roadmap/v0.2.md` |
+| Synthetic pilot evidence | `docs/pilot/synthetic-shared-pc-venue/` |
+| CVP application brief | `docs/cvp/application-brief.md` |
 
 ## Current Technical Quality Signals
 
@@ -170,4 +172,3 @@ The core request for cyber verification access is practical: allow defensive
 research workflows that necessarily reference attacker techniques while keeping
 the project's public output constrained to hardening, detection, monitoring,
 reporting, and coordinated disclosure.
-

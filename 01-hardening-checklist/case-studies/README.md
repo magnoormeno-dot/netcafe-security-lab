@@ -10,6 +10,7 @@ Case studies must remove venue names, customer names, staff identities, vendor n
 | --- | --- |
 | `TEMPLATE.md` | Submission template for future cases. |
 | `0001-anonymized-pattern.md` | Fully anonymized example case study. |
+| `0002-synthetic-false-positive-tuning.md` | Synthetic case study showing evidence-backed tuning for a benign vendor update. |
 
 ## Review Rules
 
