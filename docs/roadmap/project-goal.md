@@ -30,6 +30,8 @@ The goal is met when the project can show all of the following:
   non-goals;
 - green CI and working public links for `cafeseclab.com`,
   `research.cafeseclab.com`, and `security.txt`.
+- a concise evidence pack for external review:
+  [`docs/cvp/evidence-pack.md`](../cvp/evidence-pack.md).
 
 ## Near-Term Milestones
 
@@ -63,4 +65,3 @@ Every public artifact should answer at least one of these questions:
 - Can a future researcher reproduce the reasoning without needing private data?
 
 If an artifact does not answer one of those questions, it should be deferred.
-

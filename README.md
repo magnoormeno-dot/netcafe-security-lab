@@ -18,6 +18,7 @@ The project exists to move venue billing and management systems from informal tr
 - Security policy: [`.github/SECURITY.md`](.github/SECURITY.md)
 - Project goal: [`docs/roadmap/project-goal.md`](docs/roadmap/project-goal.md)
 - v0.2 roadmap: [`docs/roadmap/v0.2.md`](docs/roadmap/v0.2.md)
+- CVP evidence pack: [`docs/cvp/evidence-pack.md`](docs/cvp/evidence-pack.md)
 - Operator executive summary template: [`docs/operators/executive-summary-template.md`](docs/operators/executive-summary-template.md)
 - Project health playbook: [`docs/maintenance/project-health.md`](docs/maintenance/project-health.md)
 
