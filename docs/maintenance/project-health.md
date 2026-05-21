@@ -12,6 +12,7 @@ Use these links as the current public identity chain for the project:
 - Repository: <https://github.com/magnoormeno-dot/netcafe-security-lab>
 - Research site: <https://research.cafeseclab.com/>
 - Latest release: <https://github.com/magnoormeno-dot/netcafe-security-lab/releases>
+- v0.2 roadmap: <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/roadmap/v0.2.md>
 - Root site repository: <https://github.com/magnoormeno-dot/cafeseclab.com>
 - Security contact: `security@cafeseclab.com`
 - Research contact: `research@cafeseclab.com`
