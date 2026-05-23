@@ -20,6 +20,7 @@ The project exists to move venue billing and management systems from informal tr
 - v0.2 roadmap: [`docs/roadmap/v0.2.md`](docs/roadmap/v0.2.md)
 - CVP evidence pack: [`docs/cvp/evidence-pack.md`](docs/cvp/evidence-pack.md)
 - Synthetic pilot package: [`docs/pilot/synthetic-shared-pc-venue/`](docs/pilot/synthetic-shared-pc-venue/)
+- Commercialization plan: [`docs/business/commercialization-plan.md`](docs/business/commercialization-plan.md)
 - Operator executive summary template: [`docs/operators/executive-summary-template.md`](docs/operators/executive-summary-template.md)
 - Project health playbook: [`docs/maintenance/project-health.md`](docs/maintenance/project-health.md)
 

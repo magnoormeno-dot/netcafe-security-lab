@@ -42,6 +42,7 @@ The goal is met when the project can show all of the following:
 | Detection tuning evidence | Add synthetic fixtures and tuning decisions for current rules. |
 | Integrity monitor deployment | Document scheduled-task deployment and baseline rotation. |
 | `v0.2.0` release | Package the first repeatable defensive pilot workflow. |
+| Commercial validation | Test the service-led pilot offer with real buyer conversations. |
 
 ## Non-Goals
 
