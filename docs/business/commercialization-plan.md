@@ -92,6 +92,8 @@ not a full managed SOC.
 
 - Create a one-page public offer sheet.
 - Open a GitHub discussion or issue for commercial pilot questions.
+- Use the commercial validation runbook in
+  `docs/business/validation-runbook.md`.
 - Ask three real operators or IT contractors to review the synthetic pilot
   package.
 - Record objections: price, privacy concerns, time required, trust, and
@@ -209,4 +211,3 @@ audience is narrow and trust-sensitive.
   <https://learn.microsoft.com/windows/security/operating-system-security/sysmon/overview>
 - CafeSec Lab project goal:
   <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/roadmap/project-goal.md>
-
