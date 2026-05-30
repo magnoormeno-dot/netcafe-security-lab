@@ -62,9 +62,11 @@ VLAN/firewall items are physical-network scope. The lab's strongest checklist co
 | `02-billing-software` "verify billing binaries/services/config unchanged" | `Deploy-IntegrityMonitor.ps1` baselines + scans a billing-like path | ✅ |
 | `05-incident-response` playbook validation | run a control-process-stop in the lab → confirm `billing_process_termination.yml` fires → exercise IR steps | ✅ |
 
-## D. Evidence flow back to the project
+## D. Evidence flow back to the project (seam #5)
 
 `Invoke-RuleValidation.ps1` writes a structured report (`reports\rule-validation-<run>.md` + `.jsonl`)
-listing which rules converted/compiled cleanly and (optionally) which fired on lab telemetry. That
-report is the **lab-evidence** input for `../docs/pilot/synthetic-shared-pc-venue/` and
-`../docs/cvp/evidence-pack.md` — clearly labelled synthetic, and human-reviewed before publication.
+listing which rules converted/compiled cleanly and (optionally) which fired on lab telemetry.
+`scripts\analysis\Export-CvpEvidence.ps1` then renders that report into the CVP evidence format at
+[`../docs/cvp/lab-validation-evidence.md`](../docs/cvp/lab-validation-evidence.md) — clearly labelled
+synthetic/reproducible, with a reviewer gate — so it can feed `../docs/cvp/evidence-pack.md` and
+`../docs/pilot/synthetic-shared-pc-venue/` only after human review.
