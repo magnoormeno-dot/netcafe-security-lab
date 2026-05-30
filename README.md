@@ -43,7 +43,17 @@ The long-term research goals are:
 | `01-hardening-checklist/` | Vendor-neutral hardening checklist, threat model, detection rules, and anonymized case studies. |
 | `02-integrity-monitor/` | Python integrity monitoring tool for file, process, and event-log based detection. |
 | `03-blog/` | Public research notes and long-form technical articles. |
+| `04-validation-lab/` | Reproducible, fully network-isolated Hyper-V/domain testbed that validates the detection rules and integrity monitor on real Sysmon/WEF/Wazuh telemetry. |
 | `.github/` | Security policy, issue templates, CI, and organization profile content. |
+
+### Validation loop
+
+The four modules form a closed loop: `01-hardening-checklist` defines the baselines and detection
+rules, `04-validation-lab` reproduces an isolated venue-like environment and exercises those rules
+plus `02-integrity-monitor` on real telemetry, and the resulting (synthetic, human-reviewed) lab
+evidence feeds `docs/pilot/` and `docs/cvp/` and informs `03-blog`. See
+[`04-validation-lab/COVERAGE.md`](04-validation-lab/COVERAGE.md) for the rule/checklist → lab mapping.
+Lab output is reproducible synthetic evidence, not field-validated production results.
 
 ## Research Scope
 
