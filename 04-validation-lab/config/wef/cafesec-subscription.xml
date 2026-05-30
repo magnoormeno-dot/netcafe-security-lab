@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CafeSec WEF 订阅:源发起型 (SourceInitiated)。
+  收集器导入此订阅后,凡 SubscriptionManager 指向本收集器的客户机都会推送下列事件。
+  纯防御:只采集安全相关事件,供集中分析。
+  采集范围(可按需扩展):
+    - Security 日志:登录(4624/4625)、特权(4672)、进程创建(4688)、账户管理等
+    - Sysmon Operational:全部(进程/网络/文件/注册表/管道/WMI 等)
+    - PowerShell Operational:脚本块日志 (4104)
+    - System / Application:服务安装、崩溃等关键项
+  导入: wecutil cs cafesec-subscription.xml
+-->
+<Subscription xmlns="http://schemas.microsoft.com/2006/03/windows/events/subscription">
+  <SubscriptionId>CafeSec-Security</SubscriptionId>
+  <SubscriptionType>SourceInitiated</SubscriptionType>
+  <Description>CafeSec Lab 安全事件集中转发(防御用)</Description>
+  <Enabled>true</Enabled>
+  <Uri>http://schemas.microsoft.com/wbem/wsman/1/windows/EventLog</Uri>
+  <ConfigurationMode>Custom</ConfigurationMode>
+
+  <Delivery Mode="Push">
+    <Batching>
+      <MaxItems>50</MaxItems>
+      <MaxLatencyTime>30000</MaxLatencyTime>
+    </Batching>
+    <PushSettings>
+      <Heartbeat Interval="60000"/>
+    </PushSettings>
+  </Delivery>
+
+  <Query>
+    <![CDATA[
+      <QueryList>
+        <Query Id="0">
+          <Select Path="Security">*[System[(EventID=4624 or EventID=4625 or EventID=4634 or EventID=4647 or EventID=4672 or EventID=4688 or EventID=4720 or EventID=4724 or EventID=4728 or EventID=4732 or EventID=4756)]]</Select>
+          <Select Path="Microsoft-Windows-Sysmon/Operational">*</Select>
+          <Select Path="Microsoft-Windows-PowerShell/Operational">*[System[(EventID=4104)]]</Select>
+          <Select Path="System">*[System[(EventID=7045 or EventID=7040)]]</Select>
+          <Select Path="Application">*[System[(Level=1 or Level=2)]]</Select>
+        </Query>
+      </QueryList>
+    ]]>
+  </Query>
+
+  <ReadExistingEvents>false</ReadExistingEvents>
+  <TransportName>HTTP</TransportName>
+  <ContentFormat>RenderedText</ContentFormat>
+  <Locale Language="en-US"/>
+  <LogFile>ForwardedEvents</LogFile>
+  <!-- 域模式(cafesec.lab):仅用 AllowedSourceDomainComputers,源发起型走 Kerberos,无需证书。
+       SDDL 授予 Domain Computers (DC) 与 Network Service (NS) 访问权 —— 域内的标准默认值。
+       (已移除工作组才需要的 AllowedSourceNonDomainComputers / 证书签发者列表:在域里它只会
+        授权失败且语义自相矛盾。) -->
+  <AllowedSourceDomainComputers>O:NSG:NSD:(A;;GA;;;DC)(A;;GA;;;NS)</AllowedSourceDomainComputers>
+</Subscription>
