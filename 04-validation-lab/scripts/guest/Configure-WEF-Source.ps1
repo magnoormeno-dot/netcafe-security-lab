@@ -36,7 +36,6 @@ Write-Host "[ OK ] SubscriptionManager = $server" -ForegroundColor Green
 
 # 3) 让 NETWORK SERVICE 账户能读安全日志(转发安全事件所需)
 #    把 NETWORK SERVICE 加入 'Event Log Readers' 本地组。
-$sidNetworkService = 'S-1-5-20'
 try {
     $grp = [ADSI]"WinNT://./Event Log Readers,group"
     $grp.Add("WinNT://NT AUTHORITY/NETWORK SERVICE")

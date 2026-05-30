@@ -66,7 +66,7 @@ function Invoke-HostStep {
 
 # DryRun 无需管理员(只预览);实际执行才要求管理员。
 if (-not $DryRun) { Assert-Admin }
-$cfg = Get-LabConfig
+Get-LabConfig | Out-Null   # 提前校验 lab.psd1 可加载(各子脚本运行时再各自读取)
 
 Write-Step "CafeSec Lab 宿主侧编排 (Invoke-LabSetup)"
 Write-Host ("范围: 步骤 {0} → {1}{2}" -f $StartAt, $StopAt, $(if ($DryRun) { '   [DryRun]' } else { '' })) -ForegroundColor Gray

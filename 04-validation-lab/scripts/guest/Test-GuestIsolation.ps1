@@ -13,9 +13,17 @@
   任何一项"本应失败却成功"都说明隔离破裂,立即停用环境排查。
 .PARAMETER PeerIP
   同隔离网内另一台 VM 的 IP,用于正向连通性测试。默认 10.10.10.10 (Wazuh)。
+.PARAMETER PublicProbeV4
+  公网 IPv4 探测目标:刻意固定的公共 IP,用于证明【出口被阻断】(可达即隔离破裂)。默认 1.1.1.1 / 8.8.8.8。
+.PARAMETER PublicProbeV6
+  公网 IPv6 探测目标,同上。默认 Cloudflare 2606:4700:4700::1111。
 #>
 [CmdletBinding()]
-param([string]$PeerIP = '10.10.10.10')
+param(
+    [string]$PeerIP = '10.10.10.10',
+    [string[]]$PublicProbeV4 = @('1.1.1.1', '8.8.8.8'),
+    [string]$PublicProbeV6 = '2606:4700:4700::1111'
+)
 
 $pass = 0; $fail = 0
 function Check {
@@ -39,9 +47,10 @@ if (-not $peerOk) {
 if ($peerOk) { Write-Host "[PASS] 可达隔离网内 peer ($PeerIP) — VM 间连通已确认" -ForegroundColor Green; $pass++ }
 else { Write-Host "[WARN] peer ($PeerIP) 不可达 — 可能未开机/未配 IP/丢 ICMP;VM<->VM 连通未确认,与隔离是否破裂无关" -ForegroundColor Yellow }
 
-# 2) 反向:公网 IP 必须不可达
-Check "公网 1.1.1.1 不可达(出不了外网)"   { Test-Connection -ComputerName '1.1.1.1' -Count 2 -Quiet } $false
-Check "公网 8.8.8.8 不可达(出不了外网)"   { Test-Connection -ComputerName '8.8.8.8' -Count 2 -Quiet } $false
+# 2) 反向:公网 IP 必须不可达(目标为刻意固定的公共 IP,见 -PublicProbeV4)
+foreach ($ip in $PublicProbeV4) {
+    Check "公网 $ip 不可达(出不了外网)" { Test-Connection -ComputerName $ip -Count 2 -Quiet } $false
+}
 
 # 3) 向公网 DNS 解析器(UDP/53)解析必须失败 —— 真实出口探测,而非"未配 DNS"的同义反复。
 #    先清本地缓存并跳过 HOSTS,再强制把查询发往 1.1.1.1;否则缓存/HOSTS 命中会让"已解析"
@@ -64,14 +73,14 @@ Check "本机无默认网关(无 0.0.0.0/0 或 ::/0 路由)" {
 } $false
 
 # 5b) IPv6 也必须出不了网:全程只测 IPv4 会让 IPv6 通路被误判为已隔离(false PASS)。
-Check "公网 IPv6 2606:4700:4700::1111 不可达" { Test-Connection -ComputerName '2606:4700:4700::1111' -Count 2 -Quiet } $false
+Check "公网 IPv6 $PublicProbeV6 不可达" { Test-Connection -ComputerName $PublicProbeV6 -Count 2 -Quiet } $false
 Check "无全局/ULA IPv6 地址(仅 fe80:: 链路本地可接受)" {
     [bool](Get-NetIPAddress -AddressFamily IPv6 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike 'fe80:*' })
 } $false
 
 # 6) TCP 443 出站到公网应失败
 Check "TCP 443 -> 公网失败" {
-    (Test-NetConnection -ComputerName '1.1.1.1' -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded
+    (Test-NetConnection -ComputerName $PublicProbeV4[0] -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded
 } $false
 
 Write-Host "`n=== 结果: PASS=$pass  FAIL=$fail ===" -ForegroundColor Cyan

@@ -21,16 +21,24 @@ param(
     [Parameter(Mandatory)][string]$MsiPath,
     [string]$ManagerIP = '10.10.10.10',
     [string]$AgentName = $env:COMPUTERNAME,
-    [string]$RegistrationPassword    # 仅当 manager 端 authd 设置了注册密码时才需要
+    [System.Security.SecureString]$RegistrationPassword   # 仅当 manager 端 authd 设了注册密码时才需要(SecureString)
 )
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $MsiPath)) { throw "找不到 MSI: $MsiPath" }
+
+# 把 SecureString 物化为明文(仅驻留内存,用完即弃):MSI 属性与 agent-auth -P 都只接受明文。
+$regPwPlain = $null
+if ($RegistrationPassword) {
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($RegistrationPassword)
+    try   { $regPwPlain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
 
 Write-Host "安装 Wazuh agent -> manager $ManagerIP, 名称 $AgentName ..." -ForegroundColor Cyan
 # MSI 参数:写入 manager 与注册服务器地址、agent 名 —— Wazuh 4.x 据此在服务首启时自动注册。
 # 注意:变量【不要】用 $args —— 它是 PowerShell 自动变量,复用会引入隐患。
 $msiArgs = "/i `"$MsiPath`" /q WAZUH_MANAGER=`"$ManagerIP`" WAZUH_REGISTRATION_SERVER=`"$ManagerIP`" WAZUH_AGENT_NAME=`"$AgentName`""
-if ($RegistrationPassword) { $msiArgs += " WAZUH_REGISTRATION_PASSWORD=`"$RegistrationPassword`"" }
+if ($regPwPlain) { $msiArgs += " WAZUH_REGISTRATION_PASSWORD=`"$regPwPlain`"" }
 $p = Start-Process msiexec.exe -ArgumentList $msiArgs -Wait -PassThru
 # 0=成功;3010/1641=成功但需要/已触发重启 —— 均视为成功,不应当失败处理。
 if (@(0,3010,1641) -notcontains $p.ExitCode) { throw "msiexec 退出码 $($p.ExitCode)" }
@@ -48,7 +56,7 @@ $hasKey    = (Test-Path $keyFile) -and ((Get-Item $keyFile -ErrorAction Silently
 if (-not $hasKey -and (Test-Path $authd)) {
     Write-Host "回退:未发现 client.keys,改用 agent-auth 向 manager 注册(需 manager 端 authd 已开启)..." -ForegroundColor Cyan
     $authArgs = @('-m', $ManagerIP, '-A', $AgentName)
-    if ($RegistrationPassword) { $authArgs += @('-P', $RegistrationPassword) }
+    if ($regPwPlain) { $authArgs += @('-P', $regPwPlain) }
     & $authd @authArgs
 } elseif (-not (Test-Path $authd)) {
     Write-Host "[WARN] 未找到 agent-auth.exe ($authd)。将依赖 MSI 的自动注册;若 manager 未开启 authd,请用 manage_agents 预生成 key 手动注册。" -ForegroundColor Yellow

@@ -248,7 +248,7 @@ finally {
     # 释放 COM 对象,避免句柄泄漏。
     foreach ($obj in @($result, $fsi)) {
         if ($obj) {
-            try { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($obj) } catch { }
+            try { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($obj) } catch { $null = $_ }
         }
     }
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()

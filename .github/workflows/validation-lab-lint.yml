@@ -1,0 +1,80 @@
+name: Validation Lab Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '04-validation-lab/**'
+      - '.github/workflows/validation-lab-lint.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '04-validation-lab/**'
+      - '.github/workflows/validation-lab-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: PSScriptAnalyzer (Windows PowerShell 5.1)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell   # Windows PowerShell 5.1 — the scripts' real target runtime
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure PSScriptAnalyzer
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          }
+          Import-Module PSScriptAnalyzer
+          (Get-Module PSScriptAnalyzer).Version
+
+      - name: PSScriptAnalyzer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mod = '04-validation-lab'
+          $settings = Join-Path $mod 'PSScriptAnalyzerSettings.psd1'
+          Import-Module PSScriptAnalyzer
+          $scripts = Get-ChildItem $mod -Recurse -Filter *.ps1
+          Write-Host "Analyzing $($scripts.Count) PowerShell scripts in $mod ..."
+          $findings = Invoke-ScriptAnalyzer -Path $mod -Recurse -Settings $settings
+          if ($findings) {
+            $findings | Sort-Object ScriptName, Line |
+              Select-Object Severity, RuleName, @{n='File';e={Resolve-Path -Relative $_.ScriptName}}, Line, Message |
+              Format-Table -AutoSize | Out-String -Width 240 | Write-Host
+            foreach ($f in $findings) {
+              Write-Host "::error file=$($f.ScriptName),line=$($f.Line)::[$($f.RuleName)] $($f.Message)"
+            }
+            throw "PSScriptAnalyzer reported $($findings.Count) issue(s)."
+          }
+          Write-Host "PSScriptAnalyzer: clean ($($scripts.Count) scripts)."
+
+      - name: UTF-8 BOM + parse check
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mod = '04-validation-lab'
+          $scripts = Get-ChildItem $mod -Recurse -Filter *.ps1
+          $noBom = @(); $parseErrors = 0
+          foreach ($s in $scripts) {
+            $b = [System.IO.File]::ReadAllBytes($s.FullName)
+            if (-not ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)) {
+              $noBom += $s.FullName
+              Write-Host "::error file=$($s.FullName)::missing UTF-8 BOM (Windows PowerShell 5.1 reads BOM-less non-ASCII scripts as ANSI/GBK and fails to parse)"
+            }
+            $err = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($s.FullName, [ref]$null, [ref]$err) | Out-Null
+            if ($err.Count) {
+              $parseErrors += $err.Count
+              Write-Host "::error file=$($s.FullName),line=$($err[0].Extent.StartLineNumber)::$($err[0].Message)"
+            }
+          }
+          if ($noBom.Count -or $parseErrors) {
+            throw "BOM/parse check failed: bomMissing=$($noBom.Count) parseErrors=$parseErrors"
+          }
+          Write-Host "BOM + parse: all $($scripts.Count) scripts OK."
