@@ -17,6 +17,9 @@ repeat.
 
 The goal is met when the project can show all of the following:
 
+- **at least one real conversation with a real venue operator or IT contractor** reviewing the intake form
+  or a deliverable (not a synthetic stand-in). This is the single most important — and currently
+  **unmet** — signal that the workflow fits real demand, and it gates `v0.2.0`;
 - a public operator workflow that starts with a lightweight intake form and ends
   with an executive summary;
 - at least one complete synthetic pilot package using anonymized, non-sensitive
@@ -65,4 +68,7 @@ Every public artifact should answer at least one of these questions:
 - Can a vendor or venue identify a safer architecture decision?
 - Can a future researcher reproduce the reasoning without needing private data?
 
-If an artifact does not answer one of those questions, it should be deferred.
+If an artifact does not answer one of those questions, it should be deferred. In particular, the
+demand-generation surfaces (`docs/business/`, `docs/outreach/`) are **validate-first**: they are drafts to
+test with real buyers, not a validated business, and should not be foregrounded until the v0.2.0 workflow
+has run end-to-end at least once and at least one real operator conversation has happened.

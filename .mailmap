@@ -1,0 +1,5 @@
+# Single-maintainer project: normalize all commit identities to one public identity so
+# `git shortlog`/`git log --use-mailmap` do not imply a multi-person team and do not surface a
+# personal email address. (Non-destructive: this rewrites display only, not history.)
+CafeSec Lab Research Team <research@cafeseclab.com> shine leek <magnoormeno@gmail.com>
+CafeSec Lab Research Team <research@cafeseclab.com> magnoormeno-dot <magnoormeno@gmail.com>

@@ -46,6 +46,17 @@ It helps answer:
 - Legal compliance advice.
 - Public vendor accusations outside coordinated disclosure.
 
+## Scope Boundary: Billing Integrity, Not Billing Fraud
+
+This pilot covers tampering with **billing infrastructure** — unexpected changes to billing/cashier
+binaries, services, and configuration files, plus the Windows telemetry around them. It does **not** detect
+**billing fraud** (free time, balance manipulation, refund/free-time abuse at the till). That activity
+lives inside the billing application's own database and audit logs, which this pilot does not read.
+Operators feeling that pain should pursue the vendor-config controls in the hardening checklist —
+server-side pricing, named cashier accounts, and tamper-evident, exportable refund/free-time/adjustment
+logs (`01-hardening-checklist/checklist/02-billing-software.md`, BS-05/26/27/36). A future deliverable that
+ingests the vendor's own adjustment exports is a candidate, not part of this offer.
+
 ## Required From The Buyer
 
 - Written authorization for scoped systems.
@@ -73,6 +84,15 @@ At the end of the pilot, the buyer receives:
 - which alerts require follow-up;
 - what to fix in the next seven days;
 - what to schedule in the next 30 days.
+
+## Expected Operator Effort (a one-time review is not ongoing protection)
+
+This is a **point-in-time** review. The integrity monitor only keeps value if someone runs scans, triages
+drift (especially after game/billing-vendor updates), and re-baselines correctly. A venue with no IT staff
+should budget for this — either an in-house owner/contractor who can make re-baseline judgment calls, or a
+recurring "monthly review" engagement. Estimate the standing triage load explicitly before committing; if
+no one can sustain it, point-in-time monitoring will be ignored rather than acted on. Decide up front
+whether the deliverable is a one-time assessment or ongoing assurance, and price/staff accordingly.
 
 ## Draft Pricing Hypothesis
 

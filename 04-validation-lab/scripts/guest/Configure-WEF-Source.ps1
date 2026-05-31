@@ -1,17 +1,17 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  【在每台 Windows 客户机 (10.10.10.31/32) 上运行】把本机配置为 WEF 事件源,
-  推送关键安全事件到收集器 CSL-Server。
+  [Run on each Windows guest machine (10.10.10.31/32)] Configures the local machine as a WEF event source
+  that pushes key security events to the collector CSL-Server.
 .DESCRIPTION
-  源发起型(source-initiated)订阅:客户机定期联系收集器拉取订阅并推送事件。
-  需要:WinRM 启用 + 配置 SubscriptionManager 指向收集器 + 网络服务账户有读日志权限。
-  纯防御配置,不改变任何业务行为。
-  【域模式】本机已加入 cafesec.lab,WEF 走 Kerberos(HTTP/5985),无需证书。
-  本脚本是【手动逐机】配置方式;推荐改用域控上的 ..\domain\New-WefGpo.ps1 经 GPO 统一下发。
-  关键:Kerberos 必须用收集器的【FQDN】(匹配其 SPN),不能用裸 IP。
+  Source-initiated subscription: the guest machine periodically contacts the collector to pull subscriptions and push events.
+  Requires: WinRM enabled + SubscriptionManager configured to point at the collector + the NETWORK SERVICE account having read access to the logs.
+  Purely defensive configuration; it does not change any business behavior.
+  [Domain mode] This machine has already joined cafesec.lab, and WEF uses Kerberos (HTTP/5985), so no certificate is needed.
+  This script is the [manual, per-machine] configuration method; using ..\domain\New-WefGpo.ps1 on the domain controller to deploy uniformly via GPO is recommended instead.
+  Key point: Kerberos must use the collector's [FQDN] (matching its SPN); a bare IP cannot be used.
 .PARAMETER CollectorFqdn
-  收集器(= 域控)FQDN,默认 CSL-Server.cafesec.lab。客户机已加域、DNS 指向域控,可解析它。
+  Collector (= domain controller) FQDN, defaulting to CSL-Server.cafesec.lab. The guest is already domain-joined with DNS pointing at the domain controller, so it can resolve this.
 #>
 [CmdletBinding()]
 param(
@@ -19,34 +19,34 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 function Test-Admin { (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) }
-if (-not (Test-Admin)) { throw "需要管理员权限。" }
+if (-not (Test-Admin)) { throw "Administrator privileges are required." }
 
-Write-Host "=== 配置 WEF 事件源 -> 收集器 $CollectorFqdn ===" -ForegroundColor Cyan
+Write-Host "=== Configuring WEF event source -> collector $CollectorFqdn ===" -ForegroundColor Cyan
 
-# 1) 启用 WinRM(源端也需要 WinRM 服务运行)
+# 1) Enable WinRM (the source side also needs the WinRM service running)
 winrm quickconfig -quiet
 
-# 2) 配置 SubscriptionManager(源发起型)。5985 = WinRM HTTP;域内走 Kerberos。
-#    Refresh=60 秒拉取一次订阅配置。用 FQDN(非 IP)以匹配收集器 Kerberos SPN。
+# 2) Configure SubscriptionManager (source-initiated). 5985 = WinRM HTTP; within the domain it uses Kerberos.
+#    Refresh=60 pulls the subscription configuration once per 60 seconds. Use the FQDN (not the IP) to match the collector's Kerberos SPN.
 $server = "Server=http://$CollectorFqdn`:5985/wsman/SubscriptionManager/WEC,Refresh=60"
 $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\EventForwarding\SubscriptionManager'
 if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
 Set-ItemProperty -Path $regPath -Name '1' -Value $server
 Write-Host "[ OK ] SubscriptionManager = $server" -ForegroundColor Green
 
-# 3) 让 NETWORK SERVICE 账户能读安全日志(转发安全事件所需)
-#    把 NETWORK SERVICE 加入 'Event Log Readers' 本地组。
+# 3) Allow the NETWORK SERVICE account to read the security log (required to forward security events)
+#    Add NETWORK SERVICE to the local 'Event Log Readers' group.
 try {
     $grp = [ADSI]"WinNT://./Event Log Readers,group"
     $grp.Add("WinNT://NT AUTHORITY/NETWORK SERVICE")
-    Write-Host "[ OK ] 已将 NETWORK SERVICE 加入 'Event Log Readers'。" -ForegroundColor Green
+    Write-Host "[ OK ] Added NETWORK SERVICE to 'Event Log Readers'." -ForegroundColor Green
 } catch {
-    if ($_.Exception.Message -match 'already a member|已经是') { Write-Host "[ OK ] NETWORK SERVICE 已在 Event Log Readers 中。" -ForegroundColor Green }
-    else { Write-Host "[WARN] 加入 Event Log Readers 失败: $($_.Exception.Message)" -ForegroundColor Yellow }
+    if ($_.Exception.Message -match 'already a member|already is') { Write-Host "[ OK ] NETWORK SERVICE is already in Event Log Readers." -ForegroundColor Green }
+    else { Write-Host "[WARN] Failed to add to Event Log Readers: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 
-# 4) 重启 WinRM 让配置生效
+# 4) Restart WinRM so the configuration takes effect
 Restart-Service WinRM
 
-Write-Host "`n在收集器上用 'wecutil gr CafeSec-Security' 查看本源的运行状态(应出现本机)。" -ForegroundColor Gray
-Write-Host "排错: 在源端运行 eventvwr -> 应用程序和服务日志\Microsoft\Windows\Eventlog-ForwardingPlugin\Operational" -ForegroundColor Gray
+Write-Host "`nOn the collector, run 'wecutil gr CafeSec-Security' to view this source's runtime status (this machine should appear)." -ForegroundColor Gray
+Write-Host "Troubleshooting: on the source, run eventvwr -> Applications and Services Logs\Microsoft\Windows\Eventlog-ForwardingPlugin\Operational" -ForegroundColor Gray

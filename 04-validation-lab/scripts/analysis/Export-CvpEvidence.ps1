@@ -2,27 +2,26 @@
 <#
 .SYNOPSIS
   Seam #5: render an Invoke-RuleValidation report into the CVP evidence format
-  (docs/cvp/lab-validation-evidence.md). Closes the loop lab -> docs/cvp.
+  (docs/cvp/lab-validation-evidence.md) and commit the backing .jsonl so the reviewer gate is satisfiable.
 .DESCRIPTION
-  Reads a rule-validation report (the .jsonl produced by Invoke-RuleValidation.ps1) and emits a
-  fixed-format Markdown evidence file. The output is REPRODUCIBLE SYNTHETIC LAB EVIDENCE, never
-  field validation -- it states only that the repository's detection rules convert/compile cleanly
-  (and, when run in a live lab, fire on controlled benign telemetry). Per the repo data policy a
-  human must review the file before it is cited in the CVP evidence pack.
+  Reads a rule-validation report (.jsonl from Invoke-RuleValidation.ps1) and emits a fixed-format Markdown
+  evidence file plus a committed copy of the source .jsonl alongside it. The output is REPRODUCIBLE
+  SYNTHETIC LAB EVIDENCE, never field validation: it states only that the repository's detection rules
+  convert/compile cleanly (offline). Per the repo data policy a human must review it before it is cited.
 
-  Use -Stub to generate a placeholder before any validation has been run.
-.PARAMETER ReportPath
-  Path to a rule-validation .jsonl report. Default: newest reports/rule-validation-*.jsonl in the module.
-.PARAMETER OutputPath
-  Output Markdown path. Default: <repo>/docs/cvp/lab-validation-evidence.md.
-.PARAMETER Stub
-  Emit a placeholder (no report required), to be regenerated once the lab runs the validation.
+  Self-enforcing: without -Stub, this refuses to emit a non-stub file unless a report with >0 rules exists,
+  so a never-run pipeline cannot produce evidence that looks populated.
+
+  Use -Stub to (re)generate the placeholder before any validation has run.
+.PARAMETER ReportPath  Path to a rule-validation .jsonl. Default: newest reports/rule-validation-*.jsonl.
+.PARAMETER OutputPath  Output Markdown path. Default: <repo>/docs/cvp/lab-validation-evidence.md.
+.PARAMETER Stub        Emit a placeholder (no report required).
 .EXAMPLE
-  .\Export-CvpEvidence.ps1 -Stub        # create the placeholder committed to docs/cvp
+  .\Invoke-RuleValidation.ps1 ; .\Export-CvpEvidence.ps1   # generate evidence from the newest report
 .EXAMPLE
-  .\Invoke-RuleValidation.ps1 ; .\Export-CvpEvidence.ps1   # generate from the newest report
+  .\Export-CvpEvidence.ps1 -Stub                            # (re)create the placeholder
 .NOTES
-  No admin required. Output is English to match docs/cvp; written as UTF-8 (no BOM), LF.
+  No admin required. Output is English; written as UTF-8 (no BOM), LF.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -36,6 +35,7 @@ $ErrorActionPreference = 'Stop'
 $moduleRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 04-validation-lab\
 $repoRoot   = Split-Path -Parent $moduleRoot
 if (-not $OutputPath) { $OutputPath = Join-Path $repoRoot 'docs\cvp\lab-validation-evidence.md' }
+$jsonlOut = [System.IO.Path]::ChangeExtension($OutputPath, '.jsonl')
 
 # Locate the newest report unless one was given or we are stubbing.
 if (-not $Stub -and -not $ReportPath) {
@@ -44,7 +44,7 @@ if (-not $Stub -and -not $ReportPath) {
         Sort-Object Name -Descending | Select-Object -First 1
     if ($latest) { $ReportPath = $latest.FullName }
     else {
-        Write-Warn2 "未找到 rule-validation 报告;改为生成 stub。先跑 Invoke-RuleValidation.ps1 再重试以填充真实结果。"
+        Write-Warn2 "No rule-validation .jsonl report found; emitting a stub. Run Invoke-RuleValidation.ps1 first to populate real results."
         $Stub = $true
     }
 }
@@ -55,6 +55,10 @@ if (-not $Stub) {
     foreach ($line in (Get-Content -LiteralPath $ReportPath)) {
         $t = $line.Trim()
         if ($t) { $rows += ($t | ConvertFrom-Json) }
+    }
+    if (@($rows).Count -eq 0) {
+        Write-Fail "Report '$ReportPath' contains 0 rules. Refusing to emit non-stub evidence. Install the rule engines and re-run Invoke-RuleValidation.ps1, or pass -Stub."
+        exit 1
     }
 }
 
@@ -71,7 +75,7 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     } catch { $commit = 'unknown' } finally { Pop-Location }
 }
 $runtime = "Windows PowerShell $($PSVersionTable.PSVersion) on $([System.Environment]::OSVersion.VersionString)"
-$reportName = if ($ReportPath) { Split-Path $ReportPath -Leaf } else { '(pending — run Invoke-RuleValidation.ps1)' }
+$reportName = if ($ReportPath) { Split-Path $ReportPath -Leaf } else { '(pending - run Invoke-RuleValidation.ps1)' }
 
 $sigmaPass = Get-Count 'sigma' $true;  $sigmaFail = Get-Count 'sigma' $false
 $yaraPass  = Get-Count 'yara'  $true;  $yaraFail  = Get-Count 'yara'  $false
@@ -81,8 +85,8 @@ $pending = '(pending)'
 $md = New-Object System.Collections.Generic.List[string]
 $md.Add('# Lab Validation Evidence (synthetic, reproducible)')
 $md.Add('')
-$md.Add('> **This is reproducible synthetic lab evidence, not field validation.** It records only that')
-$md.Add('> the repository''s detection rules in `01-hardening-checklist/detection/` convert/compile cleanly')
+$md.Add('> **This is reproducible synthetic lab evidence, not field validation.** It records only that the')
+$md.Add('> repository''s detection rules in `01-hardening-checklist/detection/` convert/compile cleanly (offline),')
 $md.Add('> and (when run in a live, isolated lab) fire on controlled benign telemetry. Per the data policy in')
 $md.Add('> [`docs/cvp/evidence-pack.md`](evidence-pack.md), a human must review this before it is cited as')
 $md.Add('> evidence. Generated by `04-validation-lab/scripts/analysis/Export-CvpEvidence.ps1`.')
@@ -93,19 +97,20 @@ $md.Add('| Field | Value |')
 $md.Add('| --- | --- |')
 $md.Add("| Generated | $utc |")
 $md.Add("| Source report | $reportName |")
+$md.Add("| Backing artifact | [``lab-validation-evidence.jsonl``](lab-validation-evidence.jsonl) |")
 $md.Add("| Repo commit | $commit ($branch) |")
 $md.Add("| Runtime | $runtime |")
 $md.Add('| Rule source | `01-hardening-checklist/detection/` |')
 $md.Add('')
-$md.Add('## Summary')
+$md.Add('## Summary (offline convert/compile)')
 $md.Add('')
 $md.Add('| Category | Passed | Failed |')
 $md.Add('| --- | --- | --- |')
 if ($Stub) {
-    $md.Add("| Sigma -> opensearch convert | $pending | $pending |")
+    $md.Add("| Sigma -> lucene convert | $pending | $pending |")
     $md.Add("| YARA compile | $pending | $pending |")
 } else {
-    $md.Add("| Sigma -> opensearch convert | $sigmaPass | $sigmaFail |")
+    $md.Add("| Sigma -> lucene convert | $sigmaPass | $sigmaFail |")
     $md.Add("| YARA compile | $yaraPass | $yaraFail |")
 }
 $md.Add('')
@@ -114,7 +119,7 @@ $md.Add('')
 $md.Add('| Kind | Rule | Result | Detail |')
 $md.Add('| --- | --- | --- | --- |')
 if ($Stub) {
-    $md.Add('| _pending_ | _run Invoke-RuleValidation.ps1_ | — | — |')
+    $md.Add('| _pending_ | _run Invoke-RuleValidation.ps1_ | - | - |')
 } else {
     foreach ($r in $rows) {
         $res = if ([bool]$r.ok) { 'PASS' } else { 'FAIL' }
@@ -123,24 +128,30 @@ if ($Stub) {
     }
 }
 $md.Add('')
+$md.Add('## Scope of this evidence')
+$md.Add('')
+$md.Add('This file proves only the **offline** rung: that every rule parses, and that each Sigma rule converts to a')
+$md.Add('Lucene query (OpenSearch/Wazuh) and each YARA rule compiles. It does **not** prove the rules fire on real')
+$md.Add('telemetry - that **live-fire** rung requires a running, network-isolated lab and a manual benign trigger,')
+$md.Add('and is tracked in [`../../04-validation-lab/COVERAGE.md`](../../04-validation-lab/COVERAGE.md).')
+$md.Add('')
 $md.Add('## Reproduce')
 $md.Add('')
 $md.Add('```powershell')
 $md.Add('cd 04-validation-lab\scripts\analysis')
 $md.Add('.\Setup-RuleEngines.ps1        # one-time, during the temporary-connectivity phase')
-$md.Add('.\Invoke-RuleValidation.ps1    # validate 01-hardening-checklist/detection rules')
-$md.Add('.\Export-CvpEvidence.ps1       # regenerate this evidence file')
+$md.Add('.\Invoke-RuleValidation.ps1    # validate 01-hardening-checklist/detection rules (CI-enforced offline)')
+$md.Add('.\Export-CvpEvidence.ps1       # regenerate this evidence file + backing .jsonl')
 $md.Add('```')
 $md.Add('')
-$md.Add('Live-fire validation (rule fires on controlled benign telemetry) is performed in a running,')
-$md.Add('network-isolated lab; see [`04-validation-lab/COVERAGE.md`](../../04-validation-lab/COVERAGE.md).')
+$md.Add('The offline convert/compile rung also runs automatically in CI: `.github/workflows/validation-lab-rules.yml`.')
 $md.Add('')
 $md.Add('## Reviewer gate (before citing in the CVP evidence pack)')
 $md.Add('')
 $md.Add('- [ ] Repo commit above matches the release/branch being cited.')
-$md.Add('- [ ] Pass/fail counts match the linked `reports/rule-validation-*.jsonl` artifact.')
-$md.Add('- [ ] Wording stays "synthetic / reproducible", never "field-validated".')
-$md.Add('- [ ] No host-specific paths or sensitive data leaked into the table details.')
+$md.Add('- [ ] Pass/fail counts match the committed `lab-validation-evidence.jsonl` in this directory.')
+$md.Add('- [ ] Wording stays "synthetic / reproducible / offline", never "field-validated".')
+$md.Add('- [ ] Live-fire (rule-fires-on-telemetry) claims are NOT made here; they require a running lab.')
 $md.Add('')
 
 $text = ($md -join "`n") + "`n"
@@ -148,7 +159,14 @@ $outDir = Split-Path -Parent $OutputPath
 if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 if ($PSCmdlet.ShouldProcess($OutputPath, 'write CVP evidence')) {
     [System.IO.File]::WriteAllText($OutputPath, $text, (New-Object System.Text.UTF8Encoding($false)))
-    $mode = if ($Stub) { 'STUB' } else { "from $reportName" }
-    Write-Ok "已生成 CVP 证据 ($mode): $OutputPath"
-    if ($Stub) { Write-Host "跑 Invoke-RuleValidation.ps1 后重跑本脚本即可用真实结果填充。" -ForegroundColor Gray }
+    if ($Stub) {
+        [System.IO.File]::WriteAllText($jsonlOut, "", (New-Object System.Text.UTF8Encoding($false)))
+        Write-Ok "Generated CVP evidence STUB: $OutputPath"
+        Write-Host "Run Invoke-RuleValidation.ps1, then re-run this to populate real results." -ForegroundColor Gray
+    } else {
+        Copy-Item -LiteralPath $ReportPath -Destination $jsonlOut -Force
+        Write-Ok "Generated CVP evidence from $reportName (Sigma $sigmaPass/$($sigmaPass+$sigmaFail), YARA $yaraPass/$($yaraPass+$yaraFail))."
+        Write-Host "  $OutputPath" -ForegroundColor Gray
+        Write-Host "  $jsonlOut (committed backing artifact)" -ForegroundColor Gray
+    }
 }

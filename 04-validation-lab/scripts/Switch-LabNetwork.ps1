@@ -1,45 +1,45 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  在【两阶段搭建】之间安全地切换所有 CSL-* 虚拟机的网卡连接。
+  Safely switch the NIC connections of all CSL-* virtual machines between the two build phases.
 .DESCRIPTION
-  对应 docs\02-network-isolation.md 的两阶段模型:
+  Implements the two-phase model described in docs\02-network-isolation.md:
 
-    阶段一 Provisioning(临时联网):把每台 CSL VM 的网卡接到一个临时
-        交换机(NAT/External,由你预先建好),用于装 OS / 打补丁 / 装防御工具 / 下载规则。
-    阶段二 Isolated(完全隔离):把每台 CSL VM 的网卡改接回 CafeSec-Isolated(Private),
-        之后才允许进行任何研究活动。
+    Phase 1 Provisioning (temporary connectivity): connect each CSL VM's NIC to a temporary
+        switch (NAT/External, which you create beforehand), used to install the OS / apply patches / install defensive tools / download rules.
+    Phase 2 Isolated (full isolation): reconnect each CSL VM's NIC back to CafeSec-Isolated (Private),
+        only after which any research activity is allowed.
 
-  本脚本只动 config\lab.psd1 里列出的 CSL VM 的网卡的 SwitchName,
-  【不】创建、删除或修改任何交换机本身,【不】触碰任何非 CSL 虚拟机。
+  This script only changes the SwitchName of the NICs of the CSL VMs listed in config\lab.psd1.
+  It does NOT create, delete, or modify any switch itself, and does NOT touch any non-CSL VM.
 
   -Phase Provisioning:
-      把每台 CSL VM 网卡接到 -ProvisioningSwitch 指定的临时交换机。
-      该交换机【必须事先存在】。若不存在,脚本只给出创建说明并中止——
-      【绝不】静默替你创建 External 交换机(那会桥接物理网卡、打破气隙)。
+      Connect each CSL VM's NIC to the temporary switch specified by -ProvisioningSwitch.
+      That switch MUST already exist. If it does not, the script only prints creation instructions and aborts --
+      it will NEVER silently create an External switch for you (that would bridge a physical NIC and break the air gap).
 
   -Phase Isolated:
-      把每台 CSL VM 网卡改接回 CafeSec-Isolated(读自配置 Network.SwitchName)。
-      完成后提醒你运行 04-Verify-Isolation.ps1 做宿主侧验证。
+      Reconnect each CSL VM's NIC back to CafeSec-Isolated (read from config Network.SwitchName).
+      When done, reminds you to run 04-Verify-Isolation.ps1 for host-side verification.
 
-  幂等:已经接在目标交换机上的网卡会被跳过(报告"已就位"),可反复运行。
+  Idempotent: NICs already connected to the target switch are skipped (reported as "already in place"), and the script can be run repeatedly.
 .PARAMETER Phase
-  Provisioning = 临时联网阶段;Isolated = 完全隔离阶段。必填。
+  Provisioning = temporary connectivity phase; Isolated = full isolation phase. Required.
 .PARAMETER ProvisioningSwitch
-  阶段一要接入的临时交换机名(你的 NAT/External 交换机)。
-  仅在 -Phase Provisioning 时使用;默认占位名 'CafeSec-Provisioning'。
+  The name of the temporary switch to connect to in Phase 1 (your NAT/External switch).
+  Only used with -Phase Provisioning; defaults to the placeholder name 'CafeSec-Provisioning'.
 .PARAMETER WhatIf
-  只打印将要执行的网卡切换动作,不实际改动。
+  Only print the NIC switching actions that would be performed, without making any actual changes.
 .EXAMPLE
-  # 阶段一:接到你已建好的 NAT 交换机联网装东西
+  # Phase 1: connect to your already-built NAT switch to get online and install things
   .\Switch-LabNetwork.ps1 -Phase Provisioning -ProvisioningSwitch 'CafeSec-NAT'
 .EXAMPLE
-  # 阶段二:全部切回隔离交换机,然后验证
+  # Phase 2: switch everything back to the isolated switch, then verify
   .\Switch-LabNetwork.ps1 -Phase Isolated
   .\04-Verify-Isolation.ps1
 .NOTES
-  需要管理员。只读取 config\lab.psd1,沿用 lib\Common.ps1 的 Get-LabConfig 约定。
-  Connect-VMNetworkAdapter -SwitchName 用于把网卡改接到指定交换机(等同 README 阶段 E 的做法)。
+  Requires administrator. Only reads config\lab.psd1, following the Get-LabConfig convention from lib\Common.ps1.
+  Connect-VMNetworkAdapter -SwitchName is used to reconnect a NIC to the specified switch (equivalent to the approach in README phase E).
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -47,7 +47,7 @@ param(
     [ValidateSet('Provisioning', 'Isolated')]
     [string]$Phase,
 
-    # 临时联网交换机名(你的 NAT/External);仅阶段一使用。
+    # Name of the temporary connectivity switch (your NAT/External); only used in Phase 1.
     [string]$ProvisioningSwitch = 'CafeSec-Provisioning'
 )
 
@@ -57,68 +57,68 @@ $cfg = Get-LabConfig
 
 $isolatedSwitch = $cfg.Network.SwitchName   # 'CafeSec-Isolated'
 
-# ---- 解析本阶段的目标交换机 ----
+# ---- Resolve the target switch for this phase ----
 if ($Phase -eq 'Isolated') {
     $targetSwitch = $isolatedSwitch
 } else {
     $targetSwitch = $ProvisioningSwitch
 }
 
-Write-Step "阶段切换: -Phase $Phase  ->  目标交换机 '$targetSwitch'"
+Write-Step "Phase switch: -Phase $Phase  ->  target switch '$targetSwitch'"
 
 # =====================================================================
-# 1) 校验目标交换机存在(绝不静默创建 External 交换机)
+# 1) Verify the target switch exists (never silently create an External switch)
 # =====================================================================
 $sw = Get-VMSwitch -Name $targetSwitch -ErrorAction SilentlyContinue
 if (-not $sw) {
     if ($Phase -eq 'Isolated') {
-        # 隔离交换机不存在 = 还没跑过 02;指向已有脚本即可,不在此处自行创建。
-        Write-Fail "隔离交换机 '$targetSwitch' 不存在。请先运行 02-New-IsolatedSwitch.ps1 创建 Private 交换机。"
+        # The isolated switch missing = phase 02 has not been run yet; just point to the existing script, do not create it here.
+        Write-Fail "Isolated switch '$targetSwitch' does not exist. Please run 02-New-IsolatedSwitch.ps1 first to create the Private switch."
         return
     }
 
-    # 阶段一:临时交换机缺失 —— 只给说明,坚决不替用户建 External(避免误桥接物理网卡)。
-    Write-Fail "临时联网交换机 '$targetSwitch' 不存在。"
-    Write-Warn2 "出于隔离安全,本脚本【不会】替你自动创建 External/NAT 交换机(以免误桥接物理网卡、打破气隙)。"
+    # Phase 1: temporary switch missing -- only print instructions, firmly refuse to create an External switch for the user (to avoid accidentally bridging a physical NIC).
+    Write-Fail "Temporary connectivity switch '$targetSwitch' does not exist."
+    Write-Warn2 "For isolation safety, this script will NOT automatically create an External/NAT switch for you (to avoid accidentally bridging a physical NIC and breaking the air gap)."
     Write-Host  ""
-    Write-Host  "请按需手动创建其中一种,再用 -ProvisioningSwitch 指定它重跑本脚本:" -ForegroundColor Gray
+    Write-Host  "Please manually create one of the following as needed, then re-run this script specifying it with -ProvisioningSwitch:" -ForegroundColor Gray
     Write-Host  ""
-    Write-Host  "  方案 A —— Internal + NAT(推荐:仅在装东西时临时联网,可控)" -ForegroundColor Gray
+    Write-Host  "  Option A -- Internal + NAT (recommended: temporary connectivity only while installing, controlled)" -ForegroundColor Gray
     Write-Host  "    New-VMSwitch -Name '$targetSwitch' -SwitchType Internal" -ForegroundColor Gray
-    Write-Host  "    # 给宿主上的该 vNIC 配一个网关地址(示例网段 172.31.250.0/24,勿与隔离段 10.10.10.0/24 重叠):" -ForegroundColor Gray
+    Write-Host  "    # Assign a gateway address to that vNIC on the host (example subnet 172.31.250.0/24, must not overlap the isolated subnet 10.10.10.0/24):" -ForegroundColor Gray
     Write-Host  "    New-NetIPAddress -IPAddress 172.31.250.1 -PrefixLength 24 -InterfaceAlias 'vEthernet ($targetSwitch)'" -ForegroundColor Gray
     Write-Host  "    New-NetNat -Name '${targetSwitch}-NAT' -InternalIPInterfaceAddressPrefix '172.31.250.0/24'" -ForegroundColor Gray
-    Write-Host  "    # VM 内手动配:IP 172.31.250.x / 掩码 24 / 网关 172.31.250.1 / DNS 你的上游(如 1.1.1.1)" -ForegroundColor Gray
+    Write-Host  "    # Inside the VM, configure manually: IP 172.31.250.x / mask 24 / gateway 172.31.250.1 / DNS your upstream (e.g. 1.1.1.1)" -ForegroundColor Gray
     Write-Host  ""
-    Write-Host  "  方案 B —— External(桥接物理网卡,最省事但暴露面最大;装完务必切回隔离)" -ForegroundColor Gray
-    Write-Host  "    Get-NetAdapter | ft Name,InterfaceDescription,Status   # 先确认要桥接的物理网卡名" -ForegroundColor Gray
-    Write-Host  "    New-VMSwitch -Name '$targetSwitch' -NetAdapterName '<你的物理网卡名>' -AllowManagementOS `$true" -ForegroundColor Gray
+    Write-Host  "  Option B -- External (bridges a physical NIC, easiest but largest exposure; be sure to switch back to isolated when done)" -ForegroundColor Gray
+    Write-Host  "    Get-NetAdapter | ft Name,InterfaceDescription,Status   # First confirm the name of the physical NIC to bridge" -ForegroundColor Gray
+    Write-Host  "    New-VMSwitch -Name '$targetSwitch' -NetAdapterName '<your physical NIC name>' -AllowManagementOS `$true" -ForegroundColor Gray
     Write-Host  ""
-    Write-Warn2 "提醒:临时交换机网段切勿与隔离网段 $($cfg.Network.Subnet) 重叠。装完所有东西后,务必立即:"
-    Write-Warn2 "  .\Switch-LabNetwork.ps1 -Phase Isolated   再   .\04-Verify-Isolation.ps1"
+    Write-Warn2 "Reminder: the temporary switch subnet must never overlap the isolated subnet $($cfg.Network.Subnet). After installing everything, be sure to immediately:"
+    Write-Warn2 "  .\Switch-LabNetwork.ps1 -Phase Isolated   then   .\04-Verify-Isolation.ps1"
     return
 }
 
-# 阶段一接入 External 时给出明确安全提示(已知会打破隔离,仅供临时联网)。
+# Phase 1 connecting to External gives an explicit safety warning (known to break isolation, for temporary connectivity only).
 if ($Phase -eq 'Provisioning' -and $sw.SwitchType -eq 'External') {
-    Write-Warn2 "目标 '$targetSwitch' 是 External 交换机:此阶段 VM 将【能访问真实网络/外网】,仅用于装系统与工具。"
-    Write-Warn2 "完成后请立即切回隔离:  .\Switch-LabNetwork.ps1 -Phase Isolated"
+    Write-Warn2 "Target '$targetSwitch' is an External switch: in this phase the VMs WILL have access to the real network/internet, for installing the OS and tools only."
+    Write-Warn2 "When done, switch back to isolated immediately:  .\Switch-LabNetwork.ps1 -Phase Isolated"
 }
 
-# 防呆:阶段一若有人把隔离交换机本身当临时交换机传进来,直接拦下。
+# Safeguard: in Phase 1, if someone passes the isolated switch itself as the temporary switch, block it outright.
 if ($Phase -eq 'Provisioning' -and $targetSwitch -eq $isolatedSwitch) {
-    Write-Fail "你把隔离交换机 '$isolatedSwitch' 当成临时联网交换机了。隔离交换机无法联网,请指定真正的 NAT/External 交换机。"
+    Write-Fail "You passed the isolated switch '$isolatedSwitch' as the temporary connectivity switch. The isolated switch cannot reach the network; please specify a real NAT/External switch."
     return
 }
 
-Write-Ok "目标交换机 '$targetSwitch' 存在,类型 = $($sw.SwitchType)。"
+Write-Ok "Target switch '$targetSwitch' exists, type = $($sw.SwitchType)."
 
 # =====================================================================
-# 2) 逐台 CSL VM 切换网卡(只动配置清单里的 VM)
+# 2) Switch NICs for each CSL VM (only the VMs in the config manifest)
 # =====================================================================
-$switched = 0    # 实际改接的网卡数
-$already  = 0    # 已就位、跳过的网卡数
-$missing  = 0    # 配置里有但宿主上没有的 VM 数
+$switched = 0    # number of NICs actually reconnected
+$already  = 0    # number of NICs already in place and skipped
+$missing  = 0    # number of VMs present in the config but not on the host
 
 foreach ($vmDef in $cfg.VMs) {
     $vmName = $vmDef.Name
@@ -126,40 +126,40 @@ foreach ($vmDef in $cfg.VMs) {
 
     $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
     if (-not $vm) {
-        Write-Warn2 "${vmName}: 宿主上尚未创建此 VM,跳过(先跑 03-New-LabVMs.ps1)。"
+        Write-Warn2 "${vmName}: this VM has not been created on the host yet, skipping (run 03-New-LabVMs.ps1 first)."
         $missing++
         continue
     }
 
     $adapters = @(Get-VMNetworkAdapter -VMName $vmName)
     if ($adapters.Count -eq 0) {
-        Write-Warn2 "${vmName}: 没有任何网卡,跳过。"
+        Write-Warn2 "${vmName}: has no NICs, skipping."
         continue
     }
 
     foreach ($a in $adapters) {
-        $current = if ([string]::IsNullOrEmpty($a.SwitchName)) { '<未连接>' } else { $a.SwitchName }
+        $current = if ([string]::IsNullOrEmpty($a.SwitchName)) { '<not connected>' } else { $a.SwitchName }
 
         if ($a.SwitchName -eq $targetSwitch) {
-            Write-Ok "$vmName / 网卡 '$($a.Name)': 已接在 '$targetSwitch',无需改动。"
+            Write-Ok "$vmName / NIC '$($a.Name)': already connected to '$targetSwitch', no change needed."
             $already++
             continue
         }
 
-        if ($PSCmdlet.ShouldProcess("$vmName / 网卡 '$($a.Name)'", "从 '$current' 改接到 '$targetSwitch'")) {
-            # Connect-VMNetworkAdapter 会把网卡(无论原先连着哪个交换机或未连)直接接到目标交换机。
+        if ($PSCmdlet.ShouldProcess("$vmName / NIC '$($a.Name)'", "reconnect from '$current' to '$targetSwitch'")) {
+            # Connect-VMNetworkAdapter connects the NIC (regardless of which switch it was previously on, or none) directly to the target switch.
             Connect-VMNetworkAdapter -VMNetworkAdapter $a -SwitchName $targetSwitch
-            Write-Ok "$vmName / 网卡 '$($a.Name)': '$current'  ->  '$targetSwitch'"
+            Write-Ok "$vmName / NIC '$($a.Name)': '$current'  ->  '$targetSwitch'"
             $switched++
         }
     }
 }
 
 # =====================================================================
-# 3) 汇总 + 当前连接状态一览
+# 3) Summary + overview of current connection status
 # =====================================================================
-Write-Step "切换汇总"
-Write-Host "  改接网卡: $switched   已就位: $already   未创建的 VM: $missing"
+Write-Step "Switch summary"
+Write-Host "  NICs reconnected: $switched   already in place: $already   VMs not created: $missing"
 
 Write-Host ""
 Get-VM | Where-Object Name -like 'CSL-*' | ForEach-Object {
@@ -167,20 +167,20 @@ Get-VM | Where-Object Name -like 'CSL-*' | ForEach-Object {
     Get-VMNetworkAdapter -VMName $vmName | Select-Object `
         @{n = 'VM'; e = { $vmName } }, `
         @{n = 'Adapter'; e = { $_.Name } }, `
-        @{n = 'Switch'; e = { if ([string]::IsNullOrEmpty($_.SwitchName)) { '<未连接>' } else { $_.SwitchName } } }, `
+        @{n = 'Switch'; e = { if ([string]::IsNullOrEmpty($_.SwitchName)) { '<not connected>' } else { $_.SwitchName } } }, `
         @{n = 'State'; e = { $_.Status } }
 } | Format-Table -AutoSize
 
 # =====================================================================
-# 4) 下一步提示
+# 4) Next-step guidance
 # =====================================================================
 if ($Phase -eq 'Isolated') {
-    Write-Step "已进入【阶段二:完全隔离】"
-    Write-Warn2 "请立即运行宿主侧隔离验证:  .\04-Verify-Isolation.ps1"
-    Write-Host  "随后在各 Windows 客户机内运行 guest\Test-GuestIsolation.ps1 做客户机侧验证。" -ForegroundColor Gray
-    Write-Host  "宿主侧 + 客户机侧两边全 PASS 才算隔离合规,之后方可进行研究。" -ForegroundColor Gray
+    Write-Step "Now in [Phase 2: Full Isolation]"
+    Write-Warn2 "Run the host-side isolation verification immediately:  .\04-Verify-Isolation.ps1"
+    Write-Host  "Then run guest\Test-GuestIsolation.ps1 inside each Windows guest for guest-side verification." -ForegroundColor Gray
+    Write-Host  "Only when both host-side and guest-side fully PASS is isolation compliant, after which research may proceed." -ForegroundColor Gray
 } else {
-    Write-Step "已进入【阶段一:临时联网(Provisioning)】"
-    Write-Host  "现在可在各 VM 内装系统/补丁/防御工具、下载规则(见 docs\downloads.md)。" -ForegroundColor Gray
-    Write-Warn2 "全部装好后【务必】切回隔离:  .\Switch-LabNetwork.ps1 -Phase Isolated"
+    Write-Step "Now in [Phase 1: Temporary Connectivity (Provisioning)]"
+    Write-Host  "You can now install the OS/patches/defensive tools and download rules inside each VM (see docs\downloads.md)." -ForegroundColor Gray
+    Write-Warn2 "Once everything is installed, you MUST switch back to isolated:  .\Switch-LabNetwork.ps1 -Phase Isolated"
 }

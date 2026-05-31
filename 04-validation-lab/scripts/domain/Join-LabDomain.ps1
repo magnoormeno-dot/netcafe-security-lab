@@ -1,27 +1,27 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  【在每台 Windows 客户机 (CSL-Client01/02) 上运行】把本机加入 cafesec.lab 域。
-  会先把 DNS 指向域控,然后加域并重启。
+  [Run on each Windows client machine (CSL-Client01/02)] Joins the local machine to the cafesec.lab domain.
+  First points DNS at the domain controller, then joins the domain and reboots.
 .DESCRIPTION
-  加域前提:客户机的 DNS 必须能解析到域控(否则定位不到域)。隔离网无独立 DNS,
-  因此本脚本把隔离网卡的 DNS 指向域控 CSL-Server(10.10.10.20,它运行 AD 集成 DNS)。
-  这【不破坏气隙】:该 DNS 无转发器、无根提示(见 Set-DcDnsAirgap.ps1),只解析内部域;
-  Test-GuestIsolation.ps1 仍强制向 1.1.1.1 探测、判定出口被阻断。
-  加域后,WEF/Sysmon/审核策略即可由域 GPO(New-WefGpo.ps1)统一下发。
+  Domain-join prerequisite: the client's DNS must be able to resolve the domain controller (otherwise the domain cannot be located). The isolated network has no standalone DNS,
+  so this script points the isolated NIC's DNS at the domain controller CSL-Server (10.10.10.20, which runs AD-integrated DNS).
+  This does [not break the air gap]: that DNS has no forwarders and no root hints (see Set-DcDnsAirgap.ps1), and resolves only the internal domain;
+  Test-GuestIsolation.ps1 still forces a probe to 1.1.1.1 and confirms egress is blocked.
+  After joining the domain, WEF/Sysmon/audit policy can then be distributed uniformly via domain GPO (New-WefGpo.ps1).
 .PARAMETER DomainName
-  目标域 FQDN,默认 cafesec.lab。
+  Target domain FQDN, defaults to cafesec.lab.
 .PARAMETER DcIp
-  域控 IP(同时是 DNS),默认 10.10.10.20。
+  Domain controller IP (also the DNS), defaults to 10.10.10.20.
 .PARAMETER DomainCredential
-  有加域权限的域账户(如 CAFESEC\Administrator)。必填,PSCredential。
+  A domain account with domain-join rights (e.g. CAFESEC\Administrator). Required, PSCredential.
 .PARAMETER InterfaceAlias
-  多网卡时显式指定隔离网卡。
+  Explicitly specifies the isolated NIC when multiple NICs are present.
 .EXAMPLE
   $cred = Get-Credential CAFESEC\Administrator
   .\Join-LabDomain.ps1 -DomainCredential $cred
 .NOTES
-  需要管理员。加域成功后会【自动重启】。重启后用域账户登录。
+  Requires administrator. After a successful domain join, the machine [reboots automatically]. After the reboot, log in with a domain account.
 #>
 [CmdletBinding()]
 param(
@@ -34,31 +34,31 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\..\lib\Common.ps1"
 Assert-Admin
 
-Write-Step "加入域: $DomainName(域控/DNS = $DcIp)"
+Write-Step "Joining domain: $DomainName (domain controller/DNS = $DcIp)"
 
-# 选定隔离网卡(显式优先;否则要求恰好一块 Up 网卡)
+# Select the isolated NIC (explicit takes priority; otherwise require exactly one Up NIC)
 if ($InterfaceAlias) {
     $nic = Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop
 } else {
     $candidates = @(Get-NetAdapter -Physical | Where-Object Status -eq 'Up')
-    if ($candidates.Count -eq 0) { throw '未找到 Up 状态的物理网卡。' }
-    if ($candidates.Count -gt 1) { throw "检测到 $($candidates.Count) 块 Up 网卡:$($candidates.Name -join ', ')。请用 -InterfaceAlias 指定隔离网卡。" }
+    if ($candidates.Count -eq 0) { throw 'No physical NIC in Up status found.' }
+    if ($candidates.Count -gt 1) { throw "Detected $($candidates.Count) Up NICs: $($candidates.Name -join ', '). Use -InterfaceAlias to specify the isolated NIC." }
     $nic = $candidates[0]
 }
 
-# 1) DNS 指向域控(否则定位不到域)
+# 1) Point DNS at the domain controller (otherwise the domain cannot be located)
 Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses $DcIp
-Write-Ok "已将 $($nic.Name) 的 DNS 设为 $DcIp。"
+Write-Ok "Set DNS for $($nic.Name) to $DcIp."
 
-# 2) 预检:能否解析到域
+# 2) Preflight: can the domain be resolved
 try {
     Resolve-DnsName -Name $DomainName -Server $DcIp -ErrorAction Stop | Out-Null
-    Write-Ok "已能解析域 $DomainName。"
+    Write-Ok "Domain $DomainName can now be resolved."
 } catch {
-    Write-Fail "无法通过 $DcIp 解析域 $DomainName。请确认域控已就绪(Install-DomainController.ps1 + Set-DcDnsAirgap.ps1)且网络互通。"
+    Write-Fail "Unable to resolve domain $DomainName via $DcIp. Confirm the domain controller is ready (Install-DomainController.ps1 + Set-DcDnsAirgap.ps1) and that the network is reachable."
     return
 }
 
-# 3) 加域并重启
-Write-Step "Add-Computer(将自动重启)"
+# 3) Join the domain and reboot
+Write-Step "Add-Computer (will reboot automatically)"
 Add-Computer -DomainName $DomainName -Credential $DomainCredential -Restart -Force

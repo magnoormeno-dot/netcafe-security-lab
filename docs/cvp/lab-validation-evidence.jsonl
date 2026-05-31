@@ -1,0 +1,6 @@
+﻿{"kind":"sigma","rule":"anomalous_registry_modification.yml","ok":true,"detail":"converted"}
+{"kind":"sigma","rule":"billing_process_termination.yml","ok":true,"detail":"converted"}
+{"kind":"sigma","rule":"critical_service_disabled.yml","ok":true,"detail":"converted"}
+{"kind":"yara","rule":"generic_memory_scanner.yar","ok":true,"detail":"compiled"}
+{"kind":"yara","rule":"suspicious_packer_traits.yar","ok":true,"detail":"compiled"}
+{"kind":"yara","rule":"unsigned_injector_patterns.yar","ok":true,"detail":"compiled"}

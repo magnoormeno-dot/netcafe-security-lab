@@ -1,7 +1,9 @@
 # Local Sigma overlay (lab-only)
 
-规则的**事实来源**是仓库的 [`../../../01-hardening-checklist/detection/sigma`](../../../01-hardening-checklist/detection/sigma)。
-`scripts\analysis\Invoke-RuleValidation.ps1` 直接消费那里的规则,**不复制**。
+The **source of truth** for rules is
+[`../../../01-hardening-checklist/detection/sigma`](../../../01-hardening-checklist/detection/sigma).
+`scripts\analysis\Invoke-RuleValidation.ps1` consumes those rules in place (it does **not** copy them).
 
-本目录只放**靶场专用**的临时/试验 Sigma 规则(例如为复现某本地行为而写的草稿)。
-不要在这里复制仓库规则;正式规则请提交到 `01-hardening-checklist/detection/sigma`。
+This directory is only for **lab-specific** throwaway/experimental Sigma rules (e.g. a draft written to
+reproduce a local behavior). Do not copy the repo's rules here; submit real rules to
+`01-hardening-checklist/detection/sigma`.

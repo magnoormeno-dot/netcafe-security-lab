@@ -1,68 +1,68 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  【在域控 CSL-Server 上,提升并重启后运行】把 AD DNS 锁成"只解析内部域、绝不向外递归",
-  以在域环境下保持完全气隙(纵深防御)。
+  [Run on the domain controller CSL-Server, after promotion and reboot] Lock AD DNS down to "resolve internal domain only, never recurse outward",
+  to maintain a complete air gap in the domain environment (defense in depth).
 .DESCRIPTION
-  域控的 DNS 默认带根提示(root hints),理论上会尝试向公网根服务器递归。本实验网络层本就
-  无出口(私有交换机 + 无网关),这些查询只会失败;但为干净起见、且避免任何外联尝试,本脚本:
-    * 删除所有 DNS 转发器(确保不会把查询转发到任何上游)。
-    * 清空根提示(让 DNS 不再尝试外部递归)。
-    * 关闭递归(可选,隔离网内只需解析本域记录)。
-    * 校验:解析一个公网域名应当失败,解析本域 FQDN 应当成功。
-  纯防御,不改变隔离拓扑,只收紧 DNS 行为。
+  The domain controller's DNS ships with root hints by default, which in theory would try to recurse to the public root servers. This lab's network layer
+  already has no egress (private switch + no gateway), so those queries will simply fail; but for cleanliness, and to avoid any outbound attempt, this script:
+    * Removes all DNS forwarders (ensures queries are not forwarded to any upstream).
+    * Clears the root hints (so DNS no longer attempts external recursion).
+    * Disables recursion (optional; within the isolated network only local domain records need to be resolved).
+    * Validates: resolving a public domain name should fail, and resolving a local-domain FQDN should succeed.
+  Purely defensive; it does not change the isolation topology, only tightens DNS behavior.
 .NOTES
-  需要管理员,且本机已是域控(DNS 角色已就绪)。幂等,可重复运行。
+  Requires administrator, and this host must already be a domain controller (the DNS role is in place). Idempotent and safe to run repeatedly.
 #>
 [CmdletBinding()]
 param([string]$DomainName = 'cafesec.lab')
 . "$PSScriptRoot\..\lib\Common.ps1"
 Assert-Admin
 
-Write-Step "锁定 AD DNS 为气隙模式(无转发、无根提示)"
+Write-Step "Locking AD DNS into air-gap mode (no forwarders, no root hints)"
 
 if (-not (Get-Command Get-DnsServerForwarder -ErrorAction SilentlyContinue)) {
-    Write-Fail "未找到 DNS Server 模块。请确认本机已是域控并安装了 DNS 角色。"; return
+    Write-Fail "DNS Server module not found. Confirm this host is already a domain controller with the DNS role installed."; return
 }
 
-# 1) 删除所有转发器
+# 1) Remove all forwarders
 $fwd = (Get-DnsServerForwarder -ErrorAction SilentlyContinue).IPAddress
 if ($fwd) {
     foreach ($ip in $fwd) { Remove-DnsServerForwarder -IPAddress $ip -Force -ErrorAction SilentlyContinue }
-    Write-Ok "已删除 DNS 转发器: $($fwd -join ', ')"
-} else { Write-Ok "无 DNS 转发器(符合预期)。" }
+    Write-Ok "Removed DNS forwarders: $($fwd -join ', ')"
+} else { Write-Ok "No DNS forwarders (as expected)." }
 
-# 2) 清空根提示,避免向公网根服务器递归。
-#    注意:Remove-DnsServerRootHint 的两个参数集分别要求 -InputObject(管道)或 -NameServer;
-#    裸调用 `-Force` 不绑定任何参数集 -> 静默失败/无操作(再被 SilentlyContinue 吞掉)。
-#    必须把 Get 到的对象【管道】传入(文档化的"删全部"写法),并回查断言,避免假报成功。
+# 2) Clear the root hints to avoid recursing to the public root servers.
+#    Note: the two parameter sets of Remove-DnsServerRootHint require either -InputObject (pipeline) or -NameServer respectively;
+#    a bare call with `-Force` binds to no parameter set -> silent failure/no-op (then swallowed by SilentlyContinue).
+#    You must [pipe] the Get'd objects in (the documented "delete all" idiom), and assert by re-querying, to avoid a false success report.
 $hints = Get-DnsServerRootHint -ErrorAction SilentlyContinue
 if ($hints) {
     try { $hints | Remove-DnsServerRootHint -Force -ErrorAction Stop }
-    catch { Write-Warn2 "清空根提示失败(非致命): $($_.Exception.Message)" }
+    catch { Write-Warn2 "Failed to clear root hints (non-fatal): $($_.Exception.Message)" }
     $remaining = Get-DnsServerRootHint -ErrorAction SilentlyContinue
-    if (-not $remaining) { Write-Ok "已清空 DNS 根提示(root hints)。" }
-    else { Write-Fail "根提示仍存在($(@($remaining).Count) 条),清空未生效。" }
-} else { Write-Ok "无根提示(已清空)。" }
+    if (-not $remaining) { Write-Ok "Cleared the DNS root hints." }
+    else { Write-Fail "Root hints still present ($(@($remaining).Count) entries); clearing did not take effect." }
+} else { Write-Ok "No root hints (already cleared)." }
 
-# 3) 关闭递归(隔离网内只解析本域;关闭可进一步减少外联尝试)
+# 3) Disable recursion (within the isolated network only the local domain is resolved; disabling further reduces outbound attempts)
 try {
     Set-DnsServerRecursion -Enable $false -ErrorAction Stop
-    Write-Ok "已关闭 DNS 递归。"
-} catch { Write-Warn2 "关闭递归失败(非致命): $($_.Exception.Message)" }
+    Write-Ok "Disabled DNS recursion."
+} catch { Write-Warn2 "Failed to disable recursion (non-fatal): $($_.Exception.Message)" }
 
-# 4) 校验
-Write-Step "校验"
-# 4a 本域应可解析
+# 4) Validate
+Write-Step "Validating"
+# 4a The local domain should be resolvable
 try {
     Resolve-DnsName -Name $DomainName -Server 127.0.0.1 -ErrorAction Stop | Out-Null
-    Write-Ok "本域 $DomainName 可解析(内部 DNS 正常)。"
-} catch { Write-Warn2 "本域 $DomainName 解析失败,请检查 AD DNS 区域。" }
+    Write-Ok "Local domain $DomainName is resolvable (internal DNS working)."
+} catch { Write-Warn2 "Local domain $DomainName failed to resolve; check the AD DNS zone." }
 
-# 4b 公网域名应解析失败(气隙)
+# 4b A public domain name should fail to resolve (air gap)
 $ext = $false
 try { Resolve-DnsName -Name 'www.microsoft.com' -Server 127.0.0.1 -DnsOnly -QuickTimeout -ErrorAction Stop | Out-Null; $ext = $true } catch { $ext = $false }
-if ($ext) { Write-Fail "公网域名竟然解析成功!请检查是否仍有转发器/根提示。" }
-else { Write-Ok "公网域名解析失败(气隙保持)。" }
+if ($ext) { Write-Fail "A public domain name actually resolved! Check whether forwarders/root hints still remain." }
+else { Write-Ok "Public domain name failed to resolve (air gap maintained)." }
 
-Write-Step "完成。下一步: ..\guest\Configure-WEC-Collector.ps1(配 WEF 收集器)"
+Write-Step "Done. Next step: ..\guest\Configure-WEC-Collector.ps1 (configure the WEF collector)"

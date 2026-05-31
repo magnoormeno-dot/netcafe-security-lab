@@ -1,12 +1,12 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  宿主侧隔离验证。确认隔离交换机配置正确、宿主无法触达隔离网段。
+  Host-side isolation verification. Confirms the isolation switch is configured correctly and the host cannot reach the isolated network segment.
 .DESCRIPTION
-  这是"隔离是否真的生效"的宿主端证据。客户机内部的验证(ping 外网失败等)
-  由 guest\Test-GuestIsolation.ps1 完成 —— 两边都过才算合规。
+  This provides the host-side evidence for "is the isolation actually in effect". Verification inside the guest (failed pings to the internet, etc.)
+  is handled by guest\Test-GuestIsolation.ps1 -- both sides must pass to be considered compliant.
 .NOTES
-  只读,不做改动。建议在每次结构性变更后运行。
+  Read-only; makes no changes. Recommended to run after every structural change.
 #>
 [CmdletBinding()]
 param()
@@ -15,61 +15,61 @@ $cfg  = Get-LabConfig
 $name = $cfg.Network.SwitchName
 $fail = 0
 
-Write-Step "宿主侧隔离验证: $name"
+Write-Step "Host-side isolation verification: $name"
 
-# 1) 交换机存在且为 Private
+# 1) Switch exists and is Private
 $sw = Get-VMSwitch -Name $name -ErrorAction SilentlyContinue
-if (-not $sw) { Write-Fail "交换机 '$name' 不存在。"; return }
-if ($sw.SwitchType -eq 'Private') { Write-Ok "交换机类型 = Private(VM-only,不通宿主、不通外网)" }
-else { Write-Fail "交换机类型 = $($sw.SwitchType),应为 Private!"; $fail++ }
+if (-not $sw) { Write-Fail "Switch '$name' does not exist."; return }
+if ($sw.SwitchType -eq 'Private') { Write-Ok "Switch type = Private (VM-only, no host access, no internet access)" }
+else { Write-Fail "Switch type = $($sw.SwitchType), should be Private!"; $fail++ }
 
-# 2) 交换机未绑定任何物理网卡(无外部上行链路)
+# 2) Switch is not bound to any physical NIC (no external uplink)
 if ([string]::IsNullOrEmpty($sw.NetAdapterInterfaceDescription)) {
-    Write-Ok "交换机未绑定物理网卡(无外部上行链路 -> 出不了外网)"
+    Write-Ok "Switch is not bound to a physical NIC (no external uplink -> cannot reach the internet)"
 } else {
-    Write-Fail "交换机绑定了物理网卡: $($sw.NetAdapterInterfaceDescription) —— 存在外网通路!"; $fail++
+    Write-Fail "Switch is bound to a physical NIC: $($sw.NetAdapterInterfaceDescription) -- an internet path exists!"; $fail++
 }
 
-# 3) 宿主机没有该交换机对应的 vEthernet 网卡
+# 3) The host has no vEthernet adapter corresponding to this switch
 $hostNic = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -like "*$name*" -or $_.Name -like "*$name*" }
-if ($hostNic) { Write-Fail "宿主存在关联虚拟网卡 '$($hostNic.Name)' —— 宿主可能可达隔离网!"; $fail++ }
-else { Write-Ok "宿主无该交换机的 vEthernet 网卡(宿主无法 ping 通隔离网内 VM)" }
+if ($hostNic) { Write-Fail "Host has an associated virtual NIC '$($hostNic.Name)' -- the host may be able to reach the isolated network!"; $fail++ }
+else { Write-Ok "Host has no vEthernet adapter for this switch (the host cannot ping VMs on the isolated network)" }
 
-# 4) 宿主在三层也到不了隔离网段:用 Find-NetRoute 做最长前缀匹配实测,
-#    可捕获汇总/覆盖路由(如 10.0.0.0/8、10.10.0.0/16、/32),弥补精确字符串匹配的盲区。
+# 4) The host cannot reach the isolated segment at layer 3 either: use Find-NetRoute for a real longest-prefix match test,
+#    which can catch summary/covering routes (such as 10.0.0.0/8, 10.10.0.0/16, /32), covering the blind spots of exact string matching.
 $probeIp = ($cfg.VMs | Where-Object { $_.IP } | Select-Object -First 1 -ExpandProperty IP)
 if (-not $probeIp) { $probeIp = '10.10.10.10' }
 $nr = Find-NetRoute -RemoteIPAddress $probeIp -ErrorAction SilentlyContinue
-# Find-NetRoute 同时返回路由对象与源 NetIPAddress 对象;后者无 DestinationPrefix。
-# 必须先要求 DestinationPrefix 非空(否则该对象恒通过过滤 -> 永远误报 FAIL),
-# 再排除默认路由的所有写法(含 /1 拆分默认路由)与回环。
+# Find-NetRoute returns both the route object and the source NetIPAddress object; the latter has no DestinationPrefix.
+# We must first require DestinationPrefix to be non-empty (otherwise that object always passes the filter -> a permanent false FAIL),
+# then exclude every form of the default route (including /1 split default routes) and loopback.
 $reach = $nr | Where-Object {
     $_.DestinationPrefix -and
     ($_.DestinationPrefix -notin @('0.0.0.0/0','0.0.0.0/1','128.0.0.0/1','::/0','::/1','8000::/1')) -and
     ($_.DestinationPrefix -notlike '127.*') -and
     ($_.DestinationPrefix -ne '::1/128')
 }
-if ($reach) { Write-Fail "宿主存在通往 $probeIp 的具体路由($(($reach.DestinationPrefix) -join ', '))—— 三层可能可达隔离网!"; $fail++ }
-else { Write-Ok "宿主无通往隔离网段的具体路由(三层到不了 $probeIp)" }
+if ($reach) { Write-Fail "Host has a specific route toward $probeIp ($(($reach.DestinationPrefix) -join ', ')) -- the isolated network may be reachable at layer 3!"; $fail++ }
+else { Write-Ok "Host has no specific route toward the isolated segment (cannot reach $probeIp at layer 3)" }
 
-# 5) 所有 CSL VM 的网卡都接在隔离交换机上(没有"漏接"到别的网络)
-Write-Step "VM 网卡连接核查"
+# 5) Every CSL VM's NIC is connected to the isolation switch (none "leaked" onto another network)
+Write-Step "VM NIC connection check"
 foreach ($vm in $cfg.VMs) {
     $g = Get-VM -Name $vm.Name -ErrorAction SilentlyContinue
-    if (-not $g) { Write-Warn2 "$($vm.Name): 尚未创建,跳过"; continue }
+    if (-not $g) { Write-Warn2 "$($vm.Name): not yet created, skipping"; continue }
     $adapters = Get-VMNetworkAdapter -VMName $vm.Name
     foreach ($a in $adapters) {
-        if ($a.SwitchName -eq $name) { Write-Ok "$($vm.Name): 网卡接在 '$name' [OK]" }
-        elseif ([string]::IsNullOrEmpty($a.SwitchName)) { Write-Warn2 "$($vm.Name): 有未连接的网卡(可接受)" }
-        else { Write-Fail "$($vm.Name): 网卡接到了 '$($a.SwitchName)' 而非隔离交换机!"; $fail++ }
+        if ($a.SwitchName -eq $name) { Write-Ok "$($vm.Name): NIC is connected to '$name' [OK]" }
+        elseif ([string]::IsNullOrEmpty($a.SwitchName)) { Write-Warn2 "$($vm.Name): has a disconnected NIC (acceptable)" }
+        else { Write-Fail "$($vm.Name): NIC is connected to '$($a.SwitchName)' instead of the isolation switch!"; $fail++ }
     }
 }
 
-Write-Step "结论"
+Write-Step "Conclusion"
 if ($fail -eq 0) {
-    Write-Ok "宿主侧全部通过 —— 隔离前提成立。"
-    Write-Host "请在任一 Windows 客户机内再运行 guest\Test-GuestIsolation.ps1 完成客户机侧验证。" -ForegroundColor Gray
+    Write-Ok "All host-side checks passed -- the isolation prerequisites hold."
+    Write-Host "Please also run guest\Test-GuestIsolation.ps1 inside any Windows guest to complete the guest-side verification." -ForegroundColor Gray
 } else {
-    Write-Fail "发现 $fail 项问题。修复前【不要】在环境内进行任何研究活动。"
+    Write-Fail "Found $fail issue(s). DO NOT perform any research activity in this environment until they are fixed."
 }
 exit $fail

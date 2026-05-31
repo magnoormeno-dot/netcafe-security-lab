@@ -1,74 +1,75 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  【在 CSL-Server (10.10.10.20) 上运行】把本机提升为新林 cafesec.lab 的首个域控制器(DC),
-  并安装 AD 集成 DNS。完成后自动重启。
+  [Run on CSL-Server (10.10.10.20)] Promotes this host to the first domain controller (DC)
+  of the new forest cafesec.lab, and installs AD-integrated DNS. Reboots automatically when done.
 .DESCRIPTION
-  为什么要域:工作组(非域)机器间的【源发起型 WEF 走 Kerberos 无法工作】。建立域后:
-    * WEF 源 -> 收集器走 Kerberos(HTTP/5985)原生生效,无需证书。
-    * Sysmon / 审核策略 / WEF 订阅可由 GPO 统一下发(对应第五步的 GPO 要求)。
+  Why a domain is needed: between workgroup (non-domain) machines, [source-initiated WEF over Kerberos cannot work].
+  Once a domain is established:
+    * WEF source -> collector works natively over Kerberos (HTTP/5985), with no certificates required.
+    * Sysmon / audit policy / WEF subscriptions can be deployed uniformly via GPO (matching the GPO requirements in step five).
 
-  气隙保持:DC 会运行 AD 集成 DNS,仅解析内部域 cafesec.lab。
-  本脚本【不】配置任何 DNS 转发器;提升并重启后,再运行 Set-DcDnsAirgap.ps1
-  清空根提示(root hints),确保 DNS 绝不尝试向外递归 —— 网络层本就无出口,这是纵深防御。
+  Air-gap preservation: the DC runs AD-integrated DNS that resolves only the internal domain cafesec.lab.
+  This script does [NOT] configure any DNS forwarders; after promotion and reboot, run Set-DcDnsAirgap.ps1
+  to clear the root hints, ensuring DNS never attempts to recurse externally -- the network layer already has no egress, so this is defense in depth.
 
-  前置条件(务必先满足):
-    * 本机已设静态 IP 10.10.10.20/24、无默认网关(guest\Set-StaticIP.ps1)。
-    * 本机【主机名】已改为 CSL-Server 并重启过一次(域控提升前应先定好计算机名)。
-    * 本机的首选 DNS 指向自身(脚本会自动设为 127.0.0.1)。
+  Prerequisites (must be satisfied first):
+    * This host already has the static IP 10.10.10.20/24 set, with no default gateway (guest\Set-StaticIP.ps1).
+    * This host's [hostname] has already been changed to CSL-Server and the machine rebooted once (the computer name should be finalized before DC promotion).
+    * This host's preferred DNS points to itself (the script automatically sets it to 127.0.0.1).
 .PARAMETER DomainName
-  新林的 FQDN,默认 cafesec.lab(纯内部域,不与任何真实域冲突)。
+  FQDN of the new forest, default cafesec.lab (a purely internal domain that does not conflict with any real domain).
 .PARAMETER NetbiosName
-  NetBIOS 域名,默认 CAFESEC。
+  NetBIOS domain name, default CAFESEC.
 .PARAMETER SafeModePassword
-  DSRM(目录服务还原模式)管理员密码。必填,SecureString。请妥善保存。
+  DSRM (Directory Services Restore Mode) administrator password. Required, SecureString. Please store it safely.
 .EXAMPLE
-  $dsrm = Read-Host -AsSecureString "设置 DSRM 密码"
+  $dsrm = Read-Host -AsSecureString "Set the DSRM password"
   .\Install-DomainController.ps1 -SafeModePassword $dsrm
 .NOTES
-  需要管理员。提升过程会【自动重启】。重启后:
-    1) 运行 Set-DcDnsAirgap.ps1(清根提示/确认无转发器)。
-    2) 运行 ..\guest\Configure-WEC-Collector.ps1(配置 WEF 收集器)。
-    3) 运行 New-WefGpo.ps1(下发 WEF/审核策略 GPO)。
-  Windows Server 评估版可正常充当 DC。
+  Requires administrator. The promotion process will [reboot automatically]. After the reboot:
+    1) Run Set-DcDnsAirgap.ps1 (clear root hints / confirm no forwarders).
+    2) Run ..\guest\Configure-WEC-Collector.ps1 (configure the WEF collector).
+    3) Run New-WefGpo.ps1 (deploy the WEF/audit-policy GPO).
+  Windows Server evaluation editions can act as a DC normally.
 #>
 [CmdletBinding()]
 param(
     [string]$DomainName  = 'cafesec.lab',
     [string]$NetbiosName = 'CAFESEC',
     [Parameter(Mandatory)][System.Security.SecureString]$SafeModePassword,
-    [string]$InterfaceAlias    # 多网卡时显式指定隔离网卡
+    [string]$InterfaceAlias    # Explicitly specify the isolated NIC when there are multiple NICs
 )
 . "$PSScriptRoot\..\lib\Common.ps1"
 Assert-Admin
 
-Write-Step "提升为域控制器: 新林 $DomainName ($NetbiosName)"
+Write-Step "Promoting to domain controller: new forest $DomainName ($NetbiosName)"
 
-# 0) 校验静态 IP(域控必须固定为 10.10.10.20;其它脚本都硬编码该地址)。不满足直接中止,避免装错地址。
+# 0) Validate the static IP (the DC must be fixed at 10.10.10.20; all other scripts hardcode this address). Abort immediately if not met, to avoid installing with the wrong address.
 $ipOk = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object IPAddress -eq '10.10.10.20'
-if (-not $ipOk) { Write-Fail "未检测到本机 IPv4 = 10.10.10.20。请先运行 guest\Set-StaticIP.ps1 -IPAddress 10.10.10.20 -DnsServer 127.0.0.1 后重试。"; return }
+if (-not $ipOk) { Write-Fail "Did not detect this host's IPv4 = 10.10.10.20. Please first run guest\Set-StaticIP.ps1 -IPAddress 10.10.10.20 -DnsServer 127.0.0.1 and then retry."; return }
 
-# 1) 首选 DNS 指向自身。多块 Up 网卡可能意味着还挂着外联网卡(气隙隐患):
-#    要么用 -InterfaceAlias 指定隔离网卡,要么中止 —— 绝不在不确定的网卡布局下提升域控(不可逆)。
+# 1) Point the preferred DNS at itself. Multiple NICs in the Up state may mean an externally connected NIC is still attached (an air-gap hazard):
+#    either use -InterfaceAlias to specify the isolated NIC, or abort -- never promote a DC under an uncertain NIC layout (it is irreversible).
 if ($InterfaceAlias) {
     $nic = Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop
 } else {
     $cands = @(Get-NetAdapter -Physical | Where-Object Status -eq 'Up')
-    if ($cands.Count -eq 0) { Write-Fail "未找到 Up 状态的物理网卡。"; return }
-    if ($cands.Count -gt 1) { Write-Fail "检测到 $($cands.Count) 块 Up 网卡:$($cands.Name -join ', ')。请先移除多余网卡,或用 -InterfaceAlias 指定隔离网卡。"; return }
+    if ($cands.Count -eq 0) { Write-Fail "No physical NIC in the Up state was found."; return }
+    if ($cands.Count -gt 1) { Write-Fail "Detected $($cands.Count) NICs in the Up state: $($cands.Name -join ', '). Please remove the extra NICs first, or use -InterfaceAlias to specify the isolated NIC."; return }
     $nic = $cands[0]
 }
 Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses '127.0.0.1'
-Write-Ok "已将本机首选 DNS 设为 127.0.0.1(域控自身)。"
+Write-Ok "Set this host's preferred DNS to 127.0.0.1 (the DC itself)."
 
-# 2) 安装 AD DS + DNS 角色
-Write-Step "安装 AD DS / DNS 角色"
+# 2) Install the AD DS + DNS roles
+Write-Step "Installing the AD DS / DNS roles"
 $feat = Install-WindowsFeature -Name AD-Domain-Services, DNS -IncludeManagementTools
-if (-not $feat.Success) { Write-Fail "角色安装失败,终止。"; return }
-Write-Ok "AD-Domain-Services + DNS 角色已安装。"
+if (-not $feat.Success) { Write-Fail "Role installation failed; aborting."; return }
+Write-Ok "The AD-Domain-Services + DNS roles have been installed."
 
-# 3) 提升为新林首个域控(含 AD 集成 DNS)。完成后自动重启。
-Write-Step "Install-ADDSForest(将自动重启)"
+# 3) Promote to the first domain controller of the new forest (including AD-integrated DNS). Reboots automatically when done.
+Write-Step "Install-ADDSForest (will reboot automatically)"
 Import-Module ADDSDeployment
 Install-ADDSForest `
     -DomainName $DomainName `
@@ -81,5 +82,5 @@ Install-ADDSForest `
     -Force `
     -NoRebootOnCompletion:$false
 
-# 注:Install-ADDSForest 成功后会自行重启,以下提示通常不会显示。
-Write-Host "若未自动重启,请手动重启。重启后依次运行: Set-DcDnsAirgap.ps1 -> ..\guest\Configure-WEC-Collector.ps1 -> New-WefGpo.ps1" -ForegroundColor Gray
+# Note: After Install-ADDSForest succeeds it reboots on its own, so the message below usually will not be shown.
+Write-Host "If it does not reboot automatically, reboot manually. After the reboot, run in order: Set-DcDnsAirgap.ps1 -> ..\guest\Configure-WEC-Collector.ps1 -> New-WefGpo.ps1" -ForegroundColor Gray

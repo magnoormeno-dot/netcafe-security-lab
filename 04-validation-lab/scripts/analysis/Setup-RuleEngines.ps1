@@ -1,73 +1,79 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  在分析侧(可在 CSL-Server 或专门的分析 VM 上)准备 Sigma 与 YARA 运行环境与目录结构。
+  On the analysis side (the CSL-Server or a dedicated analysis VM) prepare the Sigma and YARA runtime
+  and directory structure.
 .DESCRIPTION
-  纯防御:Sigma = 通用检测规则语言(可转换为 Wazuh/各 SIEM 查询);YARA = 文件/内存特征匹配。
-  本脚本只搭【引擎与目录】,不附带任何检测规则 —— 你之后把自己的规则放进 rules\sigma 与 rules\yara。
-  隔离网无法 pip/choco 在线安装,故支持两种来源:
-    (A) 临时联网阶段在线安装(默认)
-    (B) 提供本地离线安装包路径
+  Purely defensive: Sigma = generic detection-rule language (converts to Wazuh / SIEM queries);
+  YARA = file/memory pattern matching. This script only sets up the ENGINES and DIRECTORIES; it ships no
+  detection rules of its own -- the source of truth is 01-hardening-checklist/detection (consumed in place
+  by Invoke-RuleValidation.ps1). The local rules\sigma and rules\yara dirs are a lab-only overlay.
+  The isolated network cannot pip/choco online, so two sources are supported:
+    (A) online install during the temporary-connectivity phase (default)
+    (B) a local offline package path
 .PARAMETER YaraZip
-  (可选) 本地 YARA 发行版 zip 路径(离线安装)。
+  (optional) path to a local YARA Windows release zip (offline install).
+.NOTES
+  The offline convert/compile rung is also enforced in CI by .github/workflows/validation-lab-rules.yml.
 #>
 [CmdletBinding()]
 param([string]$YaraZip)
 $ErrorActionPreference = 'Continue'
 
-$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 项目根
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # module root
 $rulesSigma = Join-Path $root 'rules\sigma'
 $rulesYara  = Join-Path $root 'rules\yara'
 $tools      = Join-Path $root 'downloads\tools'
-New-Item -ItemType Directory -Force -Path $rulesSigma,$rulesYara,$tools | Out-Null
+New-Item -ItemType Directory -Force -Path $rulesSigma, $rulesYara, $tools | Out-Null
 
-Write-Host "=== Sigma 引擎 (sigma-cli) ===" -ForegroundColor Cyan
+Write-Host "=== Sigma engine (sigma-cli) ===" -ForegroundColor Cyan
 if (Get-Command python -ErrorAction SilentlyContinue) {
-    # 临时联网阶段:安装 sigma-cli + OpenSearch 后端。
-    # 重要:不存在官方 'wazuh' sigma 后端;Wazuh 索引器/Dashboard 基于 OpenSearch,
-    # 因此用 opensearch 后端生成可直接在 Wazuh Dashboard / OpenSearch 使用的查询。
+    # Temporary-connectivity phase: install sigma-cli + the OpenSearch backend + the Windows pipeline.
+    # Note: there is no official 'wazuh' sigma backend; the Wazuh indexer/Dashboard is OpenSearch, so the
+    # opensearch backend's 'lucene' target produces queries usable directly in the Wazuh Dashboard.
+    # pysigma-pipeline-windows provides the 'ecs_windows' pipeline used at convert time.
     python -m pip install --upgrade pip
-    python -m pip install sigma-cli
-    # sigma 是 pip 安装的控制台脚本;若其 Scripts 目录尚未进 PATH,直接调用会抛 CommandNotFound,
-    # 且 $LASTEXITCODE 会保留上一条(pip)的 0 而误判成功。故先解析命令,显式置零再核对 $? 与退出码。
+    python -m pip install sigma-cli pysigma-pipeline-windows
+    # sigma is a pip-installed console script; if its Scripts dir is not yet on PATH, a bare call throws
+    # CommandNotFound and $LASTEXITCODE keeps the previous (pip) 0, misreading success. Resolve first.
     $sigmaCmd = Get-Command sigma -ErrorAction SilentlyContinue
     if ($sigmaCmd) {
         $global:LASTEXITCODE = 0
         & $sigmaCmd plugin install opensearch
-        $ok = ($? -and $LASTEXITCODE -eq 0)
+        $ok = ($LASTEXITCODE -eq 0)
     } else {
-        Write-Host "[WARN] 安装后未在 PATH 找到 sigma(可能 Python Scripts 目录未加入 PATH)。请重开 PowerShell 或把该目录加入 PATH 后重试: sigma plugin install opensearch" -ForegroundColor Yellow
+        Write-Host "[WARN] sigma not found on PATH after install (Python Scripts dir may not be on PATH). Reopen PowerShell or add it to PATH and retry: sigma plugin install opensearch" -ForegroundColor Yellow
         $ok = $false
     }
     if ($ok) {
-        Write-Host "[ OK ] sigma-cli + opensearch 后端已安装。示例转换:" -ForegroundColor Green
-        Write-Host "  # 生成 Lucene 查询(可在 Wazuh Dashboard / OpenSearch 使用):" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
-        Write-Host "  # 生成 OpenSearch 告警监控规则 JSON:" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -f monitor_rule -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "[ OK ] sigma-cli + opensearch backend installed. Example conversion:" -ForegroundColor Green
+        Write-Host "  # produce a Lucene query (usable in Wazuh Dashboard / OpenSearch):" -ForegroundColor Gray
+        Write-Host "  sigma convert -t lucene -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "  # validate the repo's real rules + write a report:" -ForegroundColor Gray
+        Write-Host "  .\Invoke-RuleValidation.ps1" -ForegroundColor Gray
     } else {
-        Write-Host "[WARN] sigma opensearch 后端安装未成功(可能正处于断网阶段或 sigma 不在 PATH)。请在临时联网阶段重试: sigma plugin install opensearch" -ForegroundColor Yellow
+        Write-Host "[WARN] sigma opensearch backend not installed (offline phase, or sigma not on PATH). Retry during the connectivity phase: sigma plugin install opensearch" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "[WARN] 未检测到 python。请先安装 Python 3,再重跑;或离线安装 sigma-cli wheel。" -ForegroundColor Yellow
+    Write-Host "[WARN] python not found. Install Python 3 and re-run, or install the sigma-cli wheel offline." -ForegroundColor Yellow
 }
 
-Write-Host "`n=== YARA 引擎 ===" -ForegroundColor Cyan
+Write-Host "`n=== YARA engine ===" -ForegroundColor Cyan
 $yaraExe = Join-Path $tools 'yara64.exe'
 if ($YaraZip -and (Test-Path $YaraZip)) {
     Expand-Archive -Path $YaraZip -DestinationPath $tools -Force
-    Write-Host "[ OK ] 已从 $YaraZip 解压 YARA 到 $tools" -ForegroundColor Green
+    Write-Host "[ OK ] extracted YARA from $YaraZip to $tools" -ForegroundColor Green
 } elseif (Test-Path $yaraExe) {
-    Write-Host "[ OK ] 已存在 $yaraExe" -ForegroundColor Green
+    Write-Host "[ OK ] $yaraExe already present" -ForegroundColor Green
 } else {
-    Write-Host "[WARN] 未提供 YARA。下载 VirusTotal/yara 的 Windows 发行版 zip(地址见 docs\downloads.md)," -ForegroundColor Yellow
-    Write-Host "       用 -YaraZip 指定路径重跑,或手动解压 yara64.exe 到 $tools" -ForegroundColor Yellow
+    Write-Host "[WARN] YARA not provided. Download the VirusTotal/yara Windows release zip (see docs\downloads.md)," -ForegroundColor Yellow
+    Write-Host "       re-run with -YaraZip <path>, or extract yara64.exe to $tools manually." -ForegroundColor Yellow
 }
 
-# 目录占位说明
-Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "把你的 Sigma 规则(.yml)放在此目录。用 sigma convert -t opensearch -p ecs_windows <rule>.yml 转换(详见 Setup-RuleEngines.ps1 输出与 README.md)。" -Encoding UTF8
-Set-Content -Path (Join-Path $rulesYara  'README.txt') -Value "把你的 YARA 规则(.yar/.yara)放在此目录。用 scripts\analysis\Invoke-YaraScan.ps1 扫描。" -Encoding UTF8
+# directory placeholder notes (lab-only overlay; the source of truth is 01-hardening-checklist/detection)
+Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "Lab-only overlay. The source of truth is 01-hardening-checklist/detection/sigma. Validate with .\Invoke-RuleValidation.ps1, or convert one rule with: sigma convert -t lucene -p ecs_windows <rule>.yml" -Encoding UTF8
+Set-Content -Path (Join-Path $rulesYara  'README.txt') -Value "Lab-only overlay. The source of truth is 01-hardening-checklist/detection/yara. Scan with scripts\analysis\Invoke-YaraScan.ps1." -Encoding UTF8
 
-Write-Host "`n目录就绪:" -ForegroundColor Gray
-Write-Host "  Sigma 规则 -> $rulesSigma" -ForegroundColor Gray
-Write-Host "  YARA  规则 -> $rulesYara" -ForegroundColor Gray
+Write-Host "`nDirectories ready:" -ForegroundColor Gray
+Write-Host "  Sigma rules -> $rulesSigma" -ForegroundColor Gray
+Write-Host "  YARA  rules -> $rulesYara" -ForegroundColor Gray

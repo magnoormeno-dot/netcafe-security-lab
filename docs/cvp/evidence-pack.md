@@ -116,8 +116,8 @@ Default data policy:
 | Roadmap | `docs/roadmap/project-goal.md` and `docs/roadmap/v0.2.md` |
 | Synthetic pilot evidence | `docs/pilot/synthetic-shared-pc-venue/` |
 | CVP application brief | `docs/cvp/application-brief.md` |
-| Validation lab | `04-validation-lab/` — reproducible, network-isolated Hyper-V/domain testbed (Sysmon/WEF/Wazuh) |
-| Lab validation evidence | `docs/cvp/lab-validation-evidence.md` — synthetic, reproducible, generated from rule-validation runs and human-reviewed |
+| Validation lab | `04-validation-lab/` — reproducible, network-isolated Hyper-V/domain testbed; **offline rule convert/compile is CI-enforced**, live-telemetry validation is wired but pending |
+| Lab validation evidence | `docs/cvp/lab-validation-evidence.md` (+ committed `.jsonl`) — synthetic offline result (Sigma 3/3, YARA 3/3); human-reviewed; **not** field validation |
 
 ## Current Technical Quality Signals
 
@@ -130,9 +130,12 @@ As of the current public state:
   `security.txt` are part of the maintenance playbook;
 - the project has a documented coordinated disclosure policy;
 - detection content is framed as vendor-neutral and defensive;
-- a reproducible validation lab (`04-validation-lab/`) exercises the detection rules and integrity
-  monitor on real Sysmon/WEF/Wazuh telemetry, with its own PSScriptAnalyzer + UTF-8 BOM lint CI;
-  its output is labelled synthetic and human-reviewed before it is cited as evidence.
+- a reproducible validation lab (`04-validation-lab/`) whose **offline rule convert/compile is enforced
+  by CI** (`validation-lab-rules.yml`: Sigma 3/3, YARA 3/3) and recorded in
+  `docs/cvp/lab-validation-evidence.md`; it is **wired** to exercise the rules and integrity monitor on
+  real Sysmon/WEF/Wazuh telemetry in a running lab, which is **pending**. That step, and all lab output,
+  is labelled synthetic and human-reviewed before being cited as evidence. The module also has its own
+  PSScriptAnalyzer + UTF-8 BOM lint CI.
 
 ## Intended Claude / AI Assistance Patterns
 

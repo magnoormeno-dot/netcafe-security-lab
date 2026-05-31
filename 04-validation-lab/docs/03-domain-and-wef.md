@@ -1,101 +1,101 @@
-# 域 + WEF + GPO(检测工程的原生底座)
+# Domain + WEF + GPO (the native foundation for detection engineering)
 
-## 为什么建域
-工作组(非域)机器间的**源发起型 WEF 走 Kerberos 无法工作**(Kerberos 需要 KDC=域控)。
-建立内部域 `cafesec.lab` 后:
-- **WEF** 源→收集器走 Kerberos(HTTP/5985),无需任何证书。
-- **GPO** 统一下发 Sysmon、审核策略、WEF 订阅(对应第五步的 GPO 要求)。
-- 更贴近真实"网吧/共享 PC 管理节点"的运维形态。
+## Why build a domain
+Between workgroup (non-domain) machines, **source-initiated WEF over Kerberos cannot work** (Kerberos requires a KDC = domain controller).
+After establishing the internal domain `cafesec.lab`:
+- **WEF** source -> collector goes over Kerberos (HTTP/5985), with no certificate required.
+- **GPO** centrally deploys Sysmon, audit policy, and WEF subscriptions (corresponding to the GPO requirements in step five).
+- Closer to the real operational model of a "net cafe / shared PC management node".
 
-> **气隙不变**:域控运行 AD 集成 DNS,但**无转发器、无根提示**,只解析内部域;
-> 网络层本就无出口。`Test-GuestIsolation.ps1` 仍强制向 `1.1.1.1` 探测来证明出口被阻断。
+> **Air gap unchanged**: the domain controller runs AD-integrated DNS, but **with no forwarders and no root hints**, resolving only the internal domain;
+> the network layer has no egress to begin with. `Test-GuestIsolation.ps1` still forces a probe to `1.1.1.1` to prove that egress is blocked.
 
-## 角色与地址(在隔离网内)
-| 主机 | 角色 | 地址 | DNS 指向 |
+## Roles and addresses (inside the isolated network)
+| Host | Role | Address | DNS pointing to |
 |---|---|---|---|
-| CSL-Server | **域控 (DC) + AD DNS + WEF 收集器** | 10.10.10.20 | 自身 (127.0.0.1) |
-| CSL-Client01/02 | 域成员(WEF 源) | 10.10.10.31/32 | 10.10.10.20(域控) |
-| CSL-Wazuh | **不加域**(Linux,Wazuh SIEM) | 10.10.10.10 | 无(静态,Wazuh 不需 DNS) |
+| CSL-Server | **Domain Controller (DC) + AD DNS + WEF collector** | 10.10.10.20 | itself (127.0.0.1) |
+| CSL-Client01/02 | Domain member (WEF source) | 10.10.10.31/32 | 10.10.10.20 (domain controller) |
+| CSL-Wazuh | **Not domain-joined** (Linux, Wazuh SIEM) | 10.10.10.10 | none (static, Wazuh does not need DNS) |
 
-## 搭建顺序(在阶段一"已装好系统"之后、阶段二锁定隔离之前完成域加入)
+## Build order (complete the domain join after "the OS is installed" in phase one, and before locking down isolation in phase two)
 
-> 仍遵循两阶段模型;域的建立/加入在 VM 内进行,不需要外网。Sysmon/Wazuh/规则等工具
-> 若要联网下载,在阶段一完成;域加入本身只在隔离网内通信即可。
+> Still follows the two-phase model; building/joining the domain is done inside the VMs and does not require external network access. Tools such as Sysmon/Wazuh/rules,
+> if they need to be downloaded online, should be done in phase one; the domain join itself only requires communication within the isolated network.
 
-### 1. 域控(CSL-Server,10.10.10.20)
+### 1. Domain controller (CSL-Server, 10.10.10.20)
 ```powershell
-# (先确保本机名为 CSL-Server、静态 IP 已配)
-cd <项目>\scripts\domain
-$dsrm = Read-Host -AsSecureString "设置 DSRM 密码"
-.\Install-DomainController.ps1 -SafeModePassword $dsrm     # 安装 AD DS+DNS,提升为 cafesec.lab,自动重启
-# —— 重启后,用本地/域管理员登录 ——
-.\Set-DcDnsAirgap.ps1                                       # 清根提示/确认无转发器,锁死气隙 DNS
-..\guest\Configure-WEC-Collector.ps1                        # 配置 WEF 收集器 + 导入订阅
-.\New-WefGpo.ps1                                            # 用 GPO 给客户机下发 WEF 源配置
+# (first ensure the host is named CSL-Server and the static IP is configured)
+cd <project>\scripts\domain
+$dsrm = Read-Host -AsSecureString "Set the DSRM password"
+.\Install-DomainController.ps1 -SafeModePassword $dsrm     # Install AD DS+DNS, promote to cafesec.lab, auto-reboot
+# -- after reboot, log in with the local/domain administrator --
+.\Set-DcDnsAirgap.ps1                                       # Clear root hints / confirm no forwarders, lock down the air-gapped DNS
+..\guest\Configure-WEC-Collector.ps1                        # Configure the WEF collector + import subscriptions
+.\New-WefGpo.ps1                                            # Use GPO to push the WEF source configuration to the clients
 ```
 
-### 2. 客户机(CSL-Client01 / 02)
+### 2. Clients (CSL-Client01 / 02)
 ```powershell
-cd <项目>\scripts\domain
+cd <project>\scripts\domain
 $cred = Get-Credential CAFESEC\Administrator
-.\Join-LabDomain.ps1 -DomainCredential $cred               # DNS 指向域控并加域,自动重启
-# 重启后用域账户登录,然后:
-gpupdate /force                                            # 拉取 WEF GPO
+.\Join-LabDomain.ps1 -DomainCredential $cred               # Point DNS at the domain controller and join the domain, auto-reboot
+# After reboot, log in with a domain account, then:
+gpupdate /force                                            # Pull the WEF GPO
 ```
 
-## WEF 数据流(域模式)
+## WEF data flow (domain mode)
 ```
-CSL-Client01/02 (源, 域成员)                         CSL-Server (收集器=域控)
-  Security/Sysmon/PowerShell 事件                        ForwardedEvents 日志
-        │  WinRM 5985 + Kerberos(源发起型,GPO 下发 SubscriptionManager)
+CSL-Client01/02 (source, domain member)              CSL-Server (collector = domain controller)
+  Security/Sysmon/PowerShell events                      ForwardedEvents log
+        │  WinRM 5985 + Kerberos (source-initiated, GPO pushes SubscriptionManager)
         └───────────────────────────────────────────────►
-  授权:订阅 XML 的 AllowedSourceDomainComputers SDDL(Domain Computers + Network Service)
+  Authorization: AllowedSourceDomainComputers SDDL in the subscription XML (Domain Computers + Network Service)
 ```
 
-## GPO 配置要点(`New-WefGpo.ps1` 已脚本化 + 需手工补充两项)
+## GPO configuration key points (`New-WefGpo.ps1` is already scripted + two items must be added manually)
 
-`New-WefGpo.ps1` 自动完成(高置信、可脚本化):
+`New-WefGpo.ps1` automatically completes (high confidence, scriptable):
 1. **Configure target Subscription Manager**
-   `计算机配置 → 管理模板 → Windows 组件 → 事件转发`
-   值:`Server=http://CSL-Server.cafesec.lab:5985/wsman/SubscriptionManager/WEC,Refresh=60`
-2. **Allow remote server management through WinRM** + 把 **WinRM 服务启动类型设为自动**(注册表策略,客户机次次重启后生效)
-   > 注意:这两项都**不会立刻启动**当前会话的 WinRM 服务 —— 见下方手工补充第 5 项。
+   `Computer Configuration -> Administrative Templates -> Windows Components -> Event Forwarding`
+   Value: `Server=http://CSL-Server.cafesec.lab:5985/wsman/SubscriptionManager/WEC,Refresh=60`
+2. **Allow remote server management through WinRM** + set the **WinRM service startup type to Automatic** (registry policy, takes effect after each client reboot)
+   > Note: neither of these will **immediately start** the WinRM service in the current session -- see manual addition item 5 below.
 
-需**手工 / 用 GPP** 补充(无法仅靠 `Set-GPRegistryValue` 完整表达):
-3. **把 `NT AUTHORITY\NETWORK SERVICE` 加入各源机本地 `Event Log Readers`**(转发 Security 日志所需)
-   - 方式 A:GPO → `计算机配置 → 首选项 → 控制面板设置 → 本地用户和组` → 更新组 `Event Log Readers` → 添加成员 `NETWORK SERVICE`。
-   - 方式 B:在每台客户机跑 `..\guest\Configure-WEF-Source.ps1`(它会做这一步)。
-4. **高级审核策略**(让 Security 日志足够丰富,供 Sigma/检测使用)
-   `计算机配置 → 策略 → Windows 设置 → 安全设置 → 高级审核策略配置 → 审核策略`:
-   - 登录/注销:**审核登录**(成功+失败)→ 4624/4625
-   - 详细跟踪:**审核进程创建**(成功)→ 4688
-   - 账户管理、特权使用等按需开启
-   并启用:`管理模板 → 系统 → 审核进程创建 → 在进程创建事件中包含命令行` → 4688 携带命令行。
-   > Sysmon 的进程/网络/注册表事件由 `..\guest\Deploy-Sysmon.ps1` 提供;审核策略补足原生 Security 维度。
-5. **确保源端 WinRM (WS-Management) 服务【正在运行】且启动类型=自动** —— `AllowAutoConfig` 策略本身不会启动该服务
-   (Win11 桌面版默认=手动/触发启动)。`New-WefGpo.ps1` 已把启动类型策略设为自动(客户机次次重启后生效),仍需让它实际在跑:
-   - 方式 A(GPO 原生):`计算机配置 → 策略 → Windows 设置 → 安全设置 → 系统服务` → `Windows Remote Management (WS-Management)` 设为 **自动**。
-   - 方式 B(GPP):`计算机配置 → 首选项 → 控制面板设置 → 服务` → WinRM → 启动类型 **自动** + 服务操作 **启动**。
-   - 方式 C:在每台客户机跑 `..\guest\Configure-WEF-Source.ps1`(含 `winrm quickconfig` + 重启服务,立即生效)。
-   > 加域时客户机已重启一次,故"自动"启动类型在加域后基本已生效;方式 C 可确保当前会话立即可用。
+Must be added **manually / via GPP** (cannot be fully expressed with `Set-GPRegistryValue` alone):
+3. **Add `NT AUTHORITY\NETWORK SERVICE` to the local `Event Log Readers` group on each source machine** (required to forward the Security log)
+   - Method A: GPO -> `Computer Configuration -> Preferences -> Control Panel Settings -> Local Users and Groups` -> update group `Event Log Readers` -> add member `NETWORK SERVICE`.
+   - Method B: run `..\guest\Configure-WEF-Source.ps1` on each client (it performs this step).
+4. **Advanced audit policy** (make the Security log rich enough for Sigma/detection use)
+   `Computer Configuration -> Policies -> Windows Settings -> Security Settings -> Advanced Audit Policy Configuration -> Audit Policies`:
+   - Logon/Logoff: **Audit Logon** (Success + Failure) -> 4624/4625
+   - Detailed Tracking: **Audit Process Creation** (Success) -> 4688
+   - Account Management, Privilege Use, etc., enabled as needed
+   And enable: `Administrative Templates -> System -> Audit Process Creation -> Include command line in process creation events` -> 4688 carries the command line.
+   > Sysmon's process/network/registry events are provided by `..\guest\Deploy-Sysmon.ps1`; the audit policy fills in the native Security dimension.
+5. **Ensure the source-side WinRM (WS-Management) service is [running] and the startup type = Automatic** -- the `AllowAutoConfig` policy itself will not start the service
+   (Win11 desktop edition defaults to Manual/triggered start). `New-WefGpo.ps1` has set the startup-type policy to Automatic (takes effect after each client reboot), but it still needs to actually be running:
+   - Method A (native GPO): `Computer Configuration -> Policies -> Windows Settings -> Security Settings -> System Services` -> set `Windows Remote Management (WS-Management)` to **Automatic**.
+   - Method B (GPP): `Computer Configuration -> Preferences -> Control Panel Settings -> Services` -> WinRM -> startup type **Automatic** + service action **Start**.
+   - Method C: run `..\guest\Configure-WEF-Source.ps1` on each client (includes `winrm quickconfig` + service restart, takes effect immediately).
+   > Since the client has already rebooted once during the domain join, the "Automatic" startup type is essentially already in effect after joining; Method C ensures the current session is immediately usable.
 
-## 验证清单
+## Verification checklist
 ```powershell
-# 域控:
+# Domain controller:
 Get-ADDomain | ft DNSRoot, NetBIOSName, DistinguishedName
 nltest /dsgetdc:cafesec.lab
-wecutil gr CafeSec-Security          # 各源应显示 Active(前提:客户机已 gpupdate【且 WinRM 服务在运行】,约 1-2 分钟出现)
+wecutil gr CafeSec-Security          # Each source should show Active (prerequisite: the client has run gpupdate [and the WinRM service is running]; appears in about 1-2 minutes)
 
-# 客户机:
-(Get-CimInstance Win32_ComputerSystem).Domain     # 应为 cafesec.lab
-gpresult /r /scope computer | findstr CafeSec-WEF  # GPO 已应用
-# 转发插件健康:事件查看器 → 应用程序和服务日志\Microsoft\Windows\Eventlog-ForwardingPlugin\Operational
+# Client:
+(Get-CimInstance Win32_ComputerSystem).Domain     # Should be cafesec.lab
+gpresult /r /scope computer | findstr CafeSec-WEF  # GPO is applied
+# Forwarding plugin health: Event Viewer -> Applications and Services Logs\Microsoft\Windows\Eventlog-ForwardingPlugin\Operational
 
-# 收集器:确认收到事件
+# Collector: confirm events are received
 Get-WinEvent -LogName ForwardedEvents -MaxEvents 20
 ```
 
-## 与隔离/Wazuh 的关系
-- **Wazuh** 仍是主 SIEM(agent→manager,10.10.10.10),覆盖 Windows + 跨平台,独立于 WEF。
-- **WEF** 是原生、无第三方 agent 的并行汇聚通道,集中存档关键安全/ Sysmon 事件到 `ForwardedEvents`。
-- 两者互补;域的引入只改变"如何认证与下发配置",**不改变隔离拓扑**(私有交换机 + 无网关 + 无 DNS 转发)。
+## Relationship to isolation / Wazuh
+- **Wazuh** is still the primary SIEM (agent -> manager, 10.10.10.10), covering Windows + cross-platform, independent of WEF.
+- **WEF** is a native, third-party-agent-free parallel aggregation channel that centrally archives key security / Sysmon events into `ForwardedEvents`.
+- The two are complementary; introducing the domain only changes "how authentication and configuration deployment work", and **does not change the isolation topology** (private switch + no gateway + no DNS forwarding).

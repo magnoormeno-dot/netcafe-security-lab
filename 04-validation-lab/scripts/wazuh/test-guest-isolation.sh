@@ -1,28 +1,29 @@
 #!/usr/bin/env bash
 #
 # test-guest-isolation.sh
-# 【在 CSL-Wazuh (Ubuntu, 10.10.10.10) 内部运行】Test-GuestIsolation.ps1 的 Linux 镜像版。
-# 证明:能 ping 通同网段 peer,但【绝对】出不了外网、碰不到宿主真实 LAN、无 DNS、无默认网关。
+# [Run inside CSL-Wazuh (Ubuntu, 10.10.10.10)] Linux mirror of Test-GuestIsolation.ps1.
+# Proves: can ping a peer on the same subnet, but [absolutely] cannot reach the
+# internet, cannot touch the host's real LAN, has no DNS, and no default gateway.
 #
-# 期望结果(任何一项"本应失败却成功"= 隔离破裂,脚本以非零退出):
-#   - 同隔离网内的另一台 VM         -> 可达          (PASS)
-#   - 公网 IP 1.1.1.1 / 8.8.8.8     -> 不可达         (PASS = 出不去)
-#   - 公网域名 DNS 解析             -> 失败          (PASS)
-#   - 常见家用/企业网段网关         -> 不可达         (PASS = 碰不到真实 LAN)
-#   - 默认网关 (default route)      -> 不存在         (PASS)
-#   - curl/TCP443 到公网            -> 失败          (PASS = 应用层也出不去)
+# Expected results (any item that "should fail but succeeds" = isolation breach; the script exits non-zero):
+#   - Another VM inside the isolated network -> reachable      (PASS)
+#   - Public IP 1.1.1.1 / 8.8.8.8            -> unreachable     (PASS = no egress)
+#   - Public domain DNS resolution           -> fails           (PASS)
+#   - Common home/enterprise subnet gateways -> unreachable     (PASS = cannot touch real LAN)
+#   - Default gateway (default route)        -> does not exist   (PASS)
+#   - curl/TCP443 to the internet            -> fails           (PASS = no egress at the app layer either)
 #
-# 用法:
+# Usage:
 #   chmod +x test-guest-isolation.sh
-#   ./test-guest-isolation.sh                 # peer 默认 10.10.10.20 (CSL-Server)
-#   ./test-guest-isolation.sh 10.10.10.31     # 指定其它同网段 peer
+#   ./test-guest-isolation.sh                 # peer defaults to 10.10.10.20 (CSL-Server)
+#   ./test-guest-isolation.sh 10.10.10.31     # specify a different peer on the same subnet
 #
-# 设计:纯防御,只读探测,不改任何配置。LF 行尾、set -u、仅用可移植工具(ping -c / timeout / ip)。
-# 注:刻意不用 'set -e' —— 探测命令失败是预期内的,需逐项判定而非中途退出。
+# Design: purely defensive, read-only probing, changes no configuration. LF line endings, set -u, only portable tools (ping -c / timeout / ip).
+# Note: intentionally not using 'set -e' -- probe command failures are expected; each item must be judged individually rather than exiting midway.
 
 set -u
 
-# ---- peer:同隔离网内另一台 VM(本机是 10.10.10.10,故默认指向 .20)----
+# ---- peer: another VM inside the isolated network (this host is 10.10.10.10, so the default points to .20) ----
 PEER_IP="${1:-10.10.10.20}"
 
 PASS=0
@@ -32,12 +33,12 @@ if [ -t 1 ]; then
     GREEN=$'\033[32m'; RED=$'\033[31m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
 fi
 
-# run_quiet <command...>  -> 返回该命令退出码,丢弃所有输出
+# run_quiet <command...>  -> returns the command's exit code, discards all output
 run_quiet() { "$@" >/dev/null 2>&1; }
 
 # check <desc> <expect: ok|fail> <command...>
-#   expect=ok   命令应成功(退出 0)
-#   expect=fail 命令应失败(非 0)—— 隔离场景下"失败才是对的"
+#   expect=ok   the command should succeed (exit 0)
+#   expect=fail the command should fail (non-zero) -- in the isolation scenario "failing is correct"
 check() {
     desc="$1"; expect="$2"; shift 2
     if run_quiet "$@"; then rc=0; else rc=$?; fi
@@ -51,12 +52,12 @@ check() {
     fi
 }
 
-# 可移植的带超时 ping:-c 计数,-W 单包超时(秒),外层再裹 timeout 兜底
+# Portable ping with timeout: -c sets the count, -W the per-packet timeout (seconds), wrapped in an outer timeout as a fallback
 ping_host() {
     timeout 6 ping -c 2 -W 2 "$1"
 }
 
-# DNS 解析探测:优先 getent(无需额外包),退化到 host/nslookup
+# DNS resolution probe: prefer getent (no extra package needed), fall back to host/nslookup
 resolve_host() {
     name="$1"
     if command -v getent >/dev/null 2>&1; then
@@ -66,60 +67,60 @@ resolve_host() {
     elif command -v nslookup >/dev/null 2>&1; then
         timeout 5 nslookup "$name"
     else
-        # 无任何解析工具 = 必然解析不了 = 符合隔离预期
+        # No resolution tool at all = resolution is bound to fail = matches the isolation expectation
         return 1
     fi
 }
 
-# 本机隔离网 IP(仅用于展示)
+# This host's isolated-network IP (for display only)
 SELF_IP="$(ip -o -4 addr show 2>/dev/null | awk '/10\.10\.10\./ {print $4}' | cut -d/ -f1 | head -n1)"
-[ -z "$SELF_IP" ] && SELF_IP='(未取得 10.10.10.x 地址)'
+[ -z "$SELF_IP" ] && SELF_IP='(no 10.10.10.x address obtained)'
 
-printf '\n%s=== 客户机隔离验证 (本机: %s, peer: %s) ===%s\n\n' "$CYAN" "$SELF_IP" "$PEER_IP" "$RESET"
+printf '\n%s=== Guest isolation verification (this host: %s, peer: %s) ===%s\n\n' "$CYAN" "$SELF_IP" "$PEER_IP" "$RESET"
 
-# 1) 正向:能 ping 通同网段 peer(否则 agent->manager 日志收集会断)
-check "可 ping 通隔离网内 peer ($PEER_IP)" ok ping_host "$PEER_IP"
+# 1) Positive: can ping the peer on the same subnet (otherwise agent->manager log collection breaks)
+check "Can ping the peer inside the isolated network ($PEER_IP)" ok ping_host "$PEER_IP"
 
-# 2) 反向:公网 IP 必须不可达(含 IPv6,避免只测 IPv4 漏判 IPv6 通路)
-check "公网 1.1.1.1 不可达(出不了外网)" fail ping_host '1.1.1.1'
-check "公网 8.8.8.8 不可达(出不了外网)" fail ping_host '8.8.8.8'
-check "公网 IPv6 2606:4700:4700::1111 不可达" fail ping_host '2606:4700:4700::1111'
+# 2) Negative: public IPs must be unreachable (including IPv6, so we don't miss an IPv6 path by only testing IPv4)
+check "Public 1.1.1.1 unreachable (no internet egress)" fail ping_host '1.1.1.1'
+check "Public 8.8.8.8 unreachable (no internet egress)" fail ping_host '8.8.8.8'
+check "Public IPv6 2606:4700:4700::1111 unreachable" fail ping_host '2606:4700:4700::1111'
 
-# 3) 公网域名 DNS 解析必须失败(隔离网无 DNS、也无出口)
-check "公网域名 DNS 解析失败 (www.microsoft.com)" fail resolve_host 'www.microsoft.com'
+# 3) Public domain DNS resolution must fail (the isolated network has no DNS and no egress)
+check "Public domain DNS resolution fails (www.microsoft.com)" fail resolve_host 'www.microsoft.com'
 
-# 4) 常见真实家用/企业 LAN 网关不可达(确认碰不到宿主真实网络)
+# 4) Common real home/enterprise LAN gateways unreachable (confirm we cannot touch the host's real network)
 for gw in 192.168.1.1 192.168.0.1 192.168.31.1 10.0.0.1; do
-    check "真实 LAN 网关 $gw 不可达" fail ping_host "$gw"
+    check "Real LAN gateway $gw unreachable" fail ping_host "$gw"
 done
 
-# 5) 本机不应存在默认网关(default route)。
-#    注意:`ip route show default` 是查询命令,无论有无默认路由都返回 0,
-#    若直接喂给 check(expect=fail)会在【正确隔离】时误报 FAIL。
-#    改用"存在性"判定:仅当确有默认路由时 helper 才返回 0。
+# 5) This host should have no default gateway (default route).
+#    Note: `ip route show default` is a query command and returns 0 whether or not a default route exists;
+#    feeding it directly to check (expect=fail) would falsely report FAIL when isolation is [correct].
+#    Use an "existence" check instead: the helper returns 0 only when a default route truly exists.
 has_default_route()  { ip    route show default 2>/dev/null | grep -q .; }
 has_default_route6() { ip -6 route show default 2>/dev/null | grep -q .; }
-check "本机无默认网关 (IPv4 无 default route)" fail has_default_route
-check "本机无默认网关 (IPv6 无 default route)" fail has_default_route6
+check "This host has no default gateway (no IPv4 default route)" fail has_default_route
+check "This host has no default gateway (no IPv6 default route)" fail has_default_route6
 
-# 6) 应用层:curl 到公网必须失败(短超时,无重试)
+# 6) Application layer: curl to the internet must fail (short timeout, no retries)
 if command -v curl >/dev/null 2>&1; then
-    check "curl 到公网失败 (http://1.1.1.1)" fail \
+    check "curl to the internet fails (http://1.1.1.1)" fail \
         timeout 8 curl -sS --max-time 5 --connect-timeout 4 -o /dev/null 'http://1.1.1.1'
 else
-    printf '%s[PASS]%s curl 到公网失败 (未安装 curl,视为不可出网)\n' "$GREEN" "$RESET"
+    printf '%s[PASS]%s curl to the internet fails (curl not installed, treated as no egress)\n' "$GREEN" "$RESET"
     PASS=$((PASS + 1))
 fi
 
-# 7) 应用层:TCP 443 到公网必须失败(用 bash /dev/tcp,无需额外工具)
-check "TCP 443 -> 公网失败 (1.1.1.1:443)" fail \
+# 7) Application layer: TCP 443 to the internet must fail (uses bash /dev/tcp, no extra tools needed)
+check "TCP 443 -> internet fails (1.1.1.1:443)" fail \
     timeout 6 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443'
 
-printf '\n%s=== 结果: PASS=%s  FAIL=%s ===%s\n' "$CYAN" "$PASS" "$FAIL" "$RESET"
+printf '\n%s=== Result: PASS=%s  FAIL=%s ===%s\n' "$CYAN" "$PASS" "$FAIL" "$RESET"
 if [ "$FAIL" -eq 0 ]; then
-    printf '%s隔离已生效:此机连得到同网段 VM,但出不了外网、碰不到真实 LAN、无 DNS、无默认网关。合规。%s\n' "$GREEN" "$RESET"
+    printf '%sIsolation is in effect: this host can reach a VM on the same subnet, but has no internet egress, cannot touch the real LAN, has no DNS, and no default gateway. Compliant.%s\n' "$GREEN" "$RESET"
 else
-    printf '%s隔离存在破口!立即停止任何研究活动并排查网卡/交换机配置(多半是某台 VM 还连着 External/NAT 交换机)。%s\n' "$RED" "$RESET"
+    printf '%sIsolation has a breach! Stop all research activity immediately and investigate the NIC/switch configuration (most likely some VM is still attached to the External/NAT switch).%s\n' "$RED" "$RESET"
 fi
 
 exit "$FAIL"

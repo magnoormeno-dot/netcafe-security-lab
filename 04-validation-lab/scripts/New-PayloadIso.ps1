@@ -1,63 +1,63 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  把一个【已下载好的工具文件夹】打包成一个 .iso 数据光盘镜像,
-  以便在 Phase 2(断网/隔离)阶段通过 Add-VMDvdDrive 挂载进气隙 VM,
-  完全无需联网即可把防御工具送进虚拟机。纯防御工具,不产生任何网络行为。
+  Packages an [already-downloaded tools folder] into a .iso data disc image,
+  so that during Phase 2 (offline/isolated) it can be mounted into an air-gapped VM via Add-VMDvdDrive,
+  delivering defensive tools into the virtual machine with no network access required at all. Defensive tools only; produces no network activity.
 
 .DESCRIPTION
-  设计要点(对照 docs\downloads.md 第 39-40 行留下的缺口:此前只提到 oscdimg):
-    * 不依赖 Windows ADK / oscdimg —— 这两者在本宿主上可能并未安装。
-    * 仅使用 Windows 系统【内置】的 IMAPI2 COM 组件:
-        - IMAPI2FS.MsftFileSystemImage  生成文件系统镜像(本脚本用它)
-        - (IMAPI2.MsftDiscFormat2Data 是用来【刻录到物理光盘】的,本脚本不需要,
-           因为我们只是把镜像写成一个 .iso 文件,不烧盘)
-    * 通过 IFileSystemImage->CreateResultImage() 拿到结果镜像,
-      再把结果的 COM IStream(ImageStream)按块复制到磁盘上的 .iso 文件。
-      由于 PowerShell 不能直接操作 System.Runtime.InteropServices.ComTypes.IStream,
-      这里用 Add-Type 内联编译一个极小的 C# 助手(ISOFile)完成 IStream -> 文件 的复制。
-    * 自动选择同时生成 ISO9660 + Joliet + UDF 文件系统,以支持长文件名、深目录与 >4GB 单文件。
+  Design notes (addressing the gap left at lines 39-40 of docs\downloads.md, which previously only mentioned oscdimg):
+    * Does not depend on the Windows ADK / oscdimg -- neither may be installed on this host.
+    * Uses only the [built-in] IMAPI2 COM components of Windows:
+        - IMAPI2FS.MsftFileSystemImage  generates the file system image (this script uses it)
+        - (IMAPI2.MsftDiscFormat2Data is for [burning to a physical disc], which this script does not need,
+           because we only write the image out to a .iso file rather than burning a disc)
+    * Obtains the result image via IFileSystemImage->CreateResultImage(),
+      then copies the result's COM IStream (ImageStream) block by block to the on-disk .iso file.
+      Because PowerShell cannot directly operate on System.Runtime.InteropServices.ComTypes.IStream,
+      a tiny inline-compiled C# helper (ISOFile) is used here via Add-Type to perform the IStream -> file copy.
+    * Automatically generates ISO9660 + Joliet + UDF file systems together, to support long file names, deep directories, and single files >4GB.
 
-  全程离线、纯本地:本脚本不发起任何网络连接,产物是一个静态 .iso 文件。
-  典型用法:Phase 1 临时联网时把工具下载到 downloads\tools(或任意文件夹),
-  本脚本打成 payload.iso;Phase 2 断网后用 Add-VMDvdDrive 挂到 CSL-Client01,
-  VM 内从光驱把工具拷出来安装。这是 Copy-VMFile(仅 Windows 客户机)之外的通用方式,
-  且对 Linux 客户机(CSL-Wazuh)同样适用。
+  Fully offline, purely local: this script does not initiate any network connection, and the output is a static .iso file.
+  Typical usage: while temporarily online in Phase 1, download tools into downloads\tools (or any folder),
+  use this script to build payload.iso; after going offline in Phase 2, mount it onto CSL-Client01 with Add-VMDvdDrive,
+  and inside the VM copy the tools off the optical drive and install them. This is a general-purpose method besides Copy-VMFile (Windows guests only),
+  and it works equally well for Linux guests (CSL-Wazuh).
 
 .PARAMETER SourceFolder
-  要打包的源文件夹(其【内容】会被放到镜像根目录)。必填。
-  例如 downloads\tools —— 里面的 Sysmon64.exe、yara64.exe、wazuh-agent.msi 等都会进 ISO。
+  The source folder to package (its [contents] are placed at the image root). Required.
+  For example downloads\tools -- the Sysmon64.exe, yara64.exe, wazuh-agent.msi, etc. inside it all go into the ISO.
 
 .PARAMETER IsoPath
-  输出 .iso 的完整路径。可选;缺省为 <IsoRoot>\payload.iso(IsoRoot 取自 config\lab.psd1)。
-  父目录不存在会自动创建;目标已存在需配合 -Force 才会覆盖。
+  The full path of the output .iso. Optional; defaults to <IsoRoot>\payload.iso (IsoRoot is taken from config\lab.psd1).
+  A missing parent directory is created automatically; overwriting an existing target requires -Force.
 
 .PARAMETER VolumeName
-  光盘卷标(VM 内显示的盘符名称)。可选;缺省 'CAFESEC_PAYLOAD'。
-  ISO9660 卷标上限 32 字符,且会被规整为大写字母/数字/下划线。
+  The disc volume label (the drive name shown inside the VM). Optional; defaults to 'CAFESEC_PAYLOAD'.
+  The ISO9660 volume label is limited to 32 characters and is normalized to uppercase letters/digits/underscores.
 
 .PARAMETER Force
-  目标 IsoPath 已存在时允许覆盖。
+  Allows overwriting when the target IsoPath already exists.
 
 .EXAMPLE
-  # 1) 打包 downloads\tools 下的所有工具为默认的 <IsoRoot>\payload.iso
+  # 1) Package all tools under downloads\tools into the default <IsoRoot>\payload.iso
   .\New-PayloadIso.ps1 -SourceFolder ..\downloads\tools
 
 .EXAMPLE
-  # 2) 指定输出路径与卷标,并覆盖已存在的同名 ISO
+  # 2) Specify the output path and volume label, and overwrite an existing ISO of the same name
   .\New-PayloadIso.ps1 -SourceFolder E:\CafeSec-Lab\downloads\tools `
       -IsoPath E:\CafeSec-Lab\ISO\payload.iso -VolumeName CAFESEC_TOOLS -Force
 
 .EXAMPLE
-  # 3) 制成后,在【宿主】上把 ISO 挂载进气隙客户机 CSL-Client01(无需联网):
+  # 3) After building, on the [host] mount the ISO into the air-gapped guest CSL-Client01 (no network needed):
   Add-VMDvdDrive -VMName CSL-Client01 -Path E:\CafeSec-Lab\ISO\payload.iso
-  # 之后在 CSL-Client01 内,光盘会出现为只读盘符(如 D:),把工具拷到 C:\CafeSec\ 即可。
-  # 用完卸载光驱(避免占用 / 保持干净):
+  # Then inside CSL-Client01 the disc appears as a read-only drive letter (e.g. D:); copy the tools to C:\CafeSec\.
+  # When done, dismount the optical drive (to avoid holding it / keep things clean):
   #   Get-VMDvdDrive -VMName CSL-Client01 | Where-Object Path -eq 'E:\CafeSec-Lab\ISO\payload.iso' | Remove-VMDvdDrive
 
 .NOTES
-  纯防御实验工具(CafeSec Lab)。仅生成本地静态 .iso 文件,不触网、不刻盘、不执行被打包的内容。
-  兼容 Windows PowerShell 5.1。无需管理员权限(写 ISO 仅需对输出目录有写权限)。
+  Defensive lab tooling only (CafeSec Lab). Generates only a local static .iso file; no network access, no disc burning, and does not execute the packaged content.
+  Compatible with Windows PowerShell 5.1. No administrator privileges required (writing the ISO only needs write access to the output directory).
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -74,76 +74,76 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# 载入项目公共函数(Write-Step/Ok/Warn2/Fail、Get-LabConfig 等)。
+# Load the project's common functions (Write-Step/Ok/Warn2/Fail, Get-LabConfig, etc.).
 . "$PSScriptRoot\lib\Common.ps1"
 
 # ---------------------------------------------------------------------------
-# 0) 参数规整与前置校验
+# 0) Parameter normalization and pre-flight validation
 # ---------------------------------------------------------------------------
-Write-Step "离线 Payload ISO 构建器(IMAPI2,无需 ADK/oscdimg)"
+Write-Step "Offline Payload ISO builder (IMAPI2, no ADK/oscdimg required)"
 
-# 源文件夹必须存在,且必须是目录、且非空(空 ISO 没有意义,通常是路径搞错了)。
+# The source folder must exist, must be a directory, and must be non-empty (an empty ISO is meaningless and usually means a wrong path).
 $src = (Resolve-Path -LiteralPath $SourceFolder -ErrorAction SilentlyContinue)
-if (-not $src) { throw "源文件夹不存在: $SourceFolder" }
+if (-not $src) { throw "Source folder does not exist: $SourceFolder" }
 $SourceFolder = $src.ProviderPath
 if (-not (Test-Path -LiteralPath $SourceFolder -PathType Container)) {
-    throw "源路径不是文件夹: $SourceFolder (请指向一个目录,其内容会被放进 ISO 根目录)"
+    throw "Source path is not a folder: $SourceFolder (point it at a directory; its contents will be placed at the ISO root)"
 }
 $items = Get-ChildItem -LiteralPath $SourceFolder -Force -ErrorAction SilentlyContinue
 if (-not $items) {
-    throw "源文件夹为空: $SourceFolder —— 没有任何文件可打包。请先把要送进 VM 的工具放进该目录。"
+    throw "Source folder is empty: $SourceFolder -- no files to package. Place the tools you want to deliver into the VM in this directory first."
 }
 
-# 缺省 IsoPath:取 config\lab.psd1 的 IsoRoot;若读不到配置则退回源文件夹同级。
+# Default IsoPath: take IsoRoot from config\lab.psd1; if the config cannot be read, fall back to the source folder's sibling.
 if (-not $IsoPath) {
     try {
         $cfg     = Get-LabConfig
         $isoRoot = $cfg.Paths.IsoRoot
     } catch {
-        Write-Warn2 "未能读取 lab.psd1($($_.Exception.Message));改用源文件夹父目录作为输出位置。"
+        Write-Warn2 "Could not read lab.psd1 ($($_.Exception.Message)); using the source folder's parent directory as the output location instead."
         $isoRoot = Split-Path -Parent $SourceFolder
     }
     $IsoPath = Join-Path $isoRoot 'payload.iso'
 }
-# 强制 .iso 扩展名,避免误写成无扩展名文件。
+# Force the .iso extension, to avoid accidentally writing an extension-less file.
 if ([System.IO.Path]::GetExtension($IsoPath) -ne '.iso') { $IsoPath += '.iso' }
 
-# 确保输出目录存在。
+# Ensure the output directory exists.
 $isoDir = Split-Path -Parent $IsoPath
 if ($isoDir -and -not (Test-Path -LiteralPath $isoDir)) {
     New-Item -ItemType Directory -Path $isoDir -Force | Out-Null
-    Write-Ok "已创建输出目录 $isoDir"
+    Write-Ok "Created output directory $isoDir"
 }
 
-# 覆盖保护。
+# Overwrite protection.
 if (Test-Path -LiteralPath $IsoPath) {
     if (-not $Force) {
-        throw "目标已存在: $IsoPath  (加 -Force 覆盖,或换一个 -IsoPath)"
+        throw "Target already exists: $IsoPath  (add -Force to overwrite, or choose a different -IsoPath)"
     }
-    Write-Warn2 "目标已存在,将被覆盖(-Force): $IsoPath"
+    Write-Warn2 "Target already exists and will be overwritten (-Force): $IsoPath"
 }
 
-# 规整卷标:ISO9660 仅允许大写 A-Z/0-9/下划线,长度 <=32。
+# Normalize the volume label: ISO9660 only allows uppercase A-Z/0-9/underscore, length <=32.
 $cleanVol = ($VolumeName.ToUpperInvariant() -replace '[^A-Z0-9_]', '_')
 if ($cleanVol.Length -gt 32) { $cleanVol = $cleanVol.Substring(0, 32) }
-if ($cleanVol -ne $VolumeName) { Write-Warn2 "卷标已规整为合法形式: '$VolumeName' -> '$cleanVol'" }
+if ($cleanVol -ne $VolumeName) { Write-Warn2 "Volume label normalized to a valid form: '$VolumeName' -> '$cleanVol'" }
 $VolumeName = $cleanVol
 
 $sizeMB = [math]::Round((Get-ChildItem -LiteralPath $SourceFolder -Recurse -File -Force -ErrorAction SilentlyContinue |
             Measure-Object -Property Length -Sum).Sum / 1MB, 1)
-Write-Host ("  源目录 : {0}" -f $SourceFolder)        -ForegroundColor Gray
-Write-Host ("  文件量 : 约 {0} MB"  -f $sizeMB)         -ForegroundColor Gray
-Write-Host ("  输出   : {0}" -f $IsoPath)              -ForegroundColor Gray
-Write-Host ("  卷标   : {0}" -f $VolumeName)           -ForegroundColor Gray
+Write-Host ("  Source dir : {0}" -f $SourceFolder)     -ForegroundColor Gray
+Write-Host ("  File size  : about {0} MB"  -f $sizeMB)  -ForegroundColor Gray
+Write-Host ("  Output     : {0}" -f $IsoPath)           -ForegroundColor Gray
+Write-Host ("  Volume     : {0}" -f $VolumeName)        -ForegroundColor Gray
 
-if (-not $PSCmdlet.ShouldProcess($IsoPath, "用 IMAPI2 把 '$SourceFolder' 打包为 ISO")) {
+if (-not $PSCmdlet.ShouldProcess($IsoPath, "Package '$SourceFolder' into an ISO using IMAPI2")) {
     return
 }
 
 # ---------------------------------------------------------------------------
-# 1) 编译 IStream -> 文件 的 C# 助手(只编译一次)
-#    说明:CreateResultImage().ImageStream 是 COM IStream;PowerShell 无法直接遍历它,
-#    故用一段极小的 C# 把它按 BlockSize 块逐块读出并写入目标 .iso 文件。
+# 1) Compile the IStream -> file C# helper (compiled only once)
+#    Note: CreateResultImage().ImageStream is a COM IStream; PowerShell cannot iterate it directly,
+#    so a tiny piece of C# reads it out block by block by BlockSize and writes it to the target .iso file.
 # ---------------------------------------------------------------------------
 if (-not ('CafeSec.IsoStreamWriter' -as [type])) {
     Add-Type -CompilerParameters (
@@ -157,14 +157,14 @@ using System.Runtime.InteropServices.ComTypes;
 
 namespace CafeSec {
     public static class IsoStreamWriter {
-        // 把 IMAPI2FS 结果镜像的 COM IStream 按块复制到磁盘上的 .iso 文件。
-        // stream      : result.ImageStream (拆箱为 ComTypes.IStream)
-        // blockSize   : result.BlockSize   (通常 2048 字节 / 扇区)
-        // totalBlocks : result.TotalBlocks (镜像总块数)
+        // Copies the COM IStream of the IMAPI2FS result image block by block to the on-disk .iso file.
+        // stream      : result.ImageStream (unboxed as ComTypes.IStream)
+        // blockSize   : result.BlockSize   (typically 2048 bytes / sector)
+        // totalBlocks : result.TotalBlocks (total number of blocks in the image)
         public unsafe static void Create(string path, object stream, int blockSize, int totalBlocks) {
             if (stream == null) { throw new ArgumentNullException("stream"); }
             IStream comStream = stream as IStream;
-            if (comStream == null) { throw new InvalidCastException("传入对象不是 COM IStream。"); }
+            if (comStream == null) { throw new InvalidCastException("The passed object is not a COM IStream."); }
 
             int bytesRead = 0;
             byte[] buffer  = new byte[blockSize];
@@ -173,7 +173,7 @@ namespace CafeSec {
             using (FileStream output = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None)) {
                 while (totalBlocks-- > 0) {
                     comStream.Read(buffer, blockSize, pRead);
-                    // 短读/零读保护:截断的流应中止,而不是把陈旧缓冲区当数据写出去(避免静默产生损坏 ISO)。
+                    // Short-read/zero-read guard: a truncated stream should abort rather than writing out a stale buffer as data (to avoid silently producing a corrupt ISO).
                     if (bytesRead == 0) { break; }
                     output.Write(buffer, 0, bytesRead);
                 }
@@ -186,66 +186,66 @@ namespace CafeSec {
 }
 
 # ---------------------------------------------------------------------------
-# 2) 用 IMAPI2FS 构建文件系统镜像
+# 2) Build the file system image with IMAPI2FS
 # ---------------------------------------------------------------------------
 $fsi    = $null
 $result = $null
 try {
-    Write-Host "  正在初始化 IMAPI2FS.MsftFileSystemImage ..." -ForegroundColor Gray
+    Write-Host "  Initializing IMAPI2FS.MsftFileSystemImage ..." -ForegroundColor Gray
     $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
 
-    # 选择介质默认值:用 DISK(硬盘文件),不受物理光盘容量限制。
-    # 常量来自 IMAPI_MEDIA_PHYSICAL_TYPE:IMAPI_MEDIA_TYPE_DISK = 0xC = 12。
+    # Choose media defaults: use DISK (hard-disk file), which is not subject to physical disc capacity limits.
+    # The constant comes from IMAPI_MEDIA_PHYSICAL_TYPE: IMAPI_MEDIA_TYPE_DISK = 0xC = 12.
     $IMAPI_MEDIA_TYPE_DISK = 12
     $fsi.ChooseImageDefaultsForMediaType($IMAPI_MEDIA_TYPE_DISK)
 
-    # FreeMediaBlocks = 0:微软文档定义 0 = "无限块数",用以解除光盘容量上限,
-    # 从而可打包任意大小(>CD/DVD)的工具目录。必须在 ChooseImageDefaultsForMediaType 之后设置。
-    # (旧脚本常用 -1,但那是未文档化行为,个别 Windows 版本会误判为超大正数上限,故改用 0。)
-    try { $fsi.FreeMediaBlocks = 0 } catch { Write-Warn2 "无法设置 FreeMediaBlocks=0,沿用介质默认容量上限。" }
+    # FreeMediaBlocks = 0: per Microsoft documentation, 0 = "unlimited blocks", used to lift the disc capacity ceiling,
+    # so a tools directory of any size (>CD/DVD) can be packaged. Must be set after ChooseImageDefaultsForMediaType.
+    # (Older scripts often used -1, but that is undocumented behavior; some Windows versions misinterpret it as a huge positive upper bound, so 0 is used instead.)
+    try { $fsi.FreeMediaBlocks = 0 } catch { Write-Warn2 "Could not set FreeMediaBlocks=0; using the media default capacity ceiling." }
 
-    # 同时生成 ISO9660 + Joliet + UDF:
-    #   ISO9660(1) 兼容性;Joliet(2) 长文件名;UDF(4) 支持 >4GB 单文件与深目录。
-    # FsiFileSystems 位标志:ISO9660=1, Joliet=2, UDF=4 -> 7 = 全开。
+    # Generate ISO9660 + Joliet + UDF together:
+    #   ISO9660(1) compatibility; Joliet(2) long file names; UDF(4) supports single files >4GB and deep directories.
+    # FsiFileSystems bit flags: ISO9660=1, Joliet=2, UDF=4 -> 7 = all enabled.
     try {
         $fsi.FileSystemsToCreate = 7
     } catch {
-        Write-Warn2 "无法设置 FileSystemsToCreate=7,回退为系统默认(通常 ISO9660+Joliet)。"
+        Write-Warn2 "Could not set FileSystemsToCreate=7; falling back to the system default (usually ISO9660+Joliet)."
     }
 
-    # 卷标(对 ISO9660 生效)。
+    # Volume label (takes effect for ISO9660).
     $fsi.VolumeName = $VolumeName
 
-    # 把源文件夹的【内容】挂到镜像根目录:
-    # AddTree(sourcePath, bIncludeBaseDirectory=$false) -> 仅放入目录内的项,不带最外层目录名。
-    Write-Host "  正在添加文件树(AddTree)..." -ForegroundColor Gray
+    # Attach the [contents] of the source folder to the image root:
+    # AddTree(sourcePath, bIncludeBaseDirectory=$false) -> only adds the items inside the directory, without the outermost directory name.
+    Write-Host "  Adding the file tree (AddTree)..." -ForegroundColor Gray
     $fsi.Root.AddTree($SourceFolder, $false)
 
-    # 生成结果镜像(包含可被流式读出的 ImageStream)。
-    Write-Host "  正在生成结果镜像(CreateResultImage)..." -ForegroundColor Gray
+    # Generate the result image (which contains the ImageStream that can be read out as a stream).
+    Write-Host "  Generating the result image (CreateResultImage)..." -ForegroundColor Gray
     $result = $fsi.CreateResultImage()
 
     $blockSize   = [int]$result.BlockSize
     $totalBlocks = [int]$result.TotalBlocks
-    if ($totalBlocks -le 0) { throw "结果镜像块数为 0,源目录可能没有可用文件。" }
+    if ($totalBlocks -le 0) { throw "The result image has 0 blocks; the source directory may have no usable files." }
 
     # ---------------------------------------------------------------------------
-    # 3) 把结果 IStream 写到 .iso 文件
+    # 3) Write the result IStream to the .iso file
     # ---------------------------------------------------------------------------
-    Write-Host ("  正在写出 ISO({0} 块 x {1} 字节)..." -f $totalBlocks, $blockSize) -ForegroundColor Gray
+    Write-Host ("  Writing out the ISO ({0} blocks x {1} bytes)..." -f $totalBlocks, $blockSize) -ForegroundColor Gray
     [CafeSec.IsoStreamWriter]::Create($IsoPath, $result.ImageStream, $blockSize, $totalBlocks)
 }
 catch {
-    Write-Fail "ISO 构建失败: $($_.Exception.Message)"
-    # 失败时清理可能产生的半成品文件,避免误挂载到 VM。
+    Write-Fail "ISO build failed: $($_.Exception.Message)"
+    # On failure, clean up any partially produced file to avoid mistakenly mounting it into a VM.
     if ($IsoPath -and (Test-Path -LiteralPath $IsoPath)) {
         Remove-Item -LiteralPath $IsoPath -Force -ErrorAction SilentlyContinue
-        Write-Warn2 "已删除不完整的输出文件: $IsoPath"
+        Write-Warn2 "Deleted the incomplete output file: $IsoPath"
     }
     throw
 }
 finally {
-    # 释放 COM 对象,避免句柄泄漏。
+    # Release the COM objects to avoid handle leaks.
     foreach ($obj in @($result, $fsi)) {
         if ($obj) {
             try { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($obj) } catch { $null = $_ }
@@ -255,19 +255,19 @@ finally {
 }
 
 # ---------------------------------------------------------------------------
-# 4) 校验并收尾
+# 4) Validate and wrap up
 # ---------------------------------------------------------------------------
-if (-not (Test-Path -LiteralPath $IsoPath)) { throw "构建结束但未找到输出文件: $IsoPath" }
+if (-not (Test-Path -LiteralPath $IsoPath)) { throw "Build finished but the output file was not found: $IsoPath" }
 $out = Get-Item -LiteralPath $IsoPath
 if ($out.Length -le 0) {
     Remove-Item -LiteralPath $IsoPath -Force -ErrorAction SilentlyContinue
-    throw "输出 ISO 大小为 0,已删除。请检查源目录内容。"
+    throw "The output ISO is 0 bytes and has been deleted. Check the source directory contents."
 }
 
-Write-Ok ("ISO 构建完成: {0}  ({1} MB)" -f $IsoPath, [math]::Round($out.Length / 1MB, 1))
+Write-Ok ("ISO build complete: {0}  ({1} MB)" -f $IsoPath, [math]::Round($out.Length / 1MB, 1))
 Write-Host ""
-Write-Host "下一步(Phase 2,断网后在【宿主】PowerShell 执行)——把它挂进气隙客户机:" -ForegroundColor Cyan
+Write-Host "Next step (Phase 2, run in [host] PowerShell after going offline) -- mount it into the air-gapped guest:" -ForegroundColor Cyan
 Write-Host ("  Add-VMDvdDrive -VMName CSL-Client01 -Path '{0}'" -f $IsoPath) -ForegroundColor Gray
-Write-Host "  # VM 内出现只读光盘盘符,将工具拷到 C:\CafeSec\ 后安装。用完卸载光驱:" -ForegroundColor DarkGray
+Write-Host "  # A read-only optical drive letter appears inside the VM; copy the tools to C:\CafeSec\ and install. When done, dismount the optical drive:" -ForegroundColor DarkGray
 Write-Host ("  # Get-VMDvdDrive -VMName CSL-Client01 | Where-Object Path -eq '{0}' | Remove-VMDvdDrive" -f $IsoPath) -ForegroundColor DarkGray
-Write-Host "提示:Linux 客户机(CSL-Wazuh)同样可挂载本 ISO;Windows 客户机也可改用 Copy-VMFile(见 docs\downloads.md)。" -ForegroundColor Gray
+Write-Host "Tip: the Linux guest (CSL-Wazuh) can mount this ISO as well; Windows guests may also use Copy-VMFile instead (see docs\downloads.md)." -ForegroundColor Gray
