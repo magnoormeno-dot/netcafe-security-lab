@@ -43,17 +43,19 @@ The long-term research goals are:
 | `01-hardening-checklist/` | Vendor-neutral hardening checklist, threat model, detection rules, and anonymized case studies. |
 | `02-integrity-monitor/` | Python integrity monitoring tool for file, process, and event-log based detection. |
 | `03-blog/` | Public research notes and long-form technical articles. |
-| `04-validation-lab/` | Reproducible, fully network-isolated Hyper-V/domain testbed that validates the detection rules and integrity monitor on real Sysmon/WEF/Wazuh telemetry. |
+| `04-validation-lab/` | Reproducible, fully network-isolated Hyper-V/domain testbed. Offline rule convert/compile is **CI-enforced**; live-telemetry validation of the rules and integrity monitor is wired and pending. |
 | `.github/` | Security policy, issue templates, CI, and organization profile content. |
 
 ### Validation loop
 
-The four modules form a closed loop: `01-hardening-checklist` defines the baselines and detection
-rules, `04-validation-lab` reproduces an isolated venue-like environment and exercises those rules
-plus `02-integrity-monitor` on real telemetry, and the resulting (synthetic, human-reviewed) lab
-evidence feeds `docs/pilot/` and `docs/cvp/` and informs `03-blog`. See
-[`04-validation-lab/COVERAGE.md`](04-validation-lab/COVERAGE.md) for the rule/checklist → lab mapping.
-Lab output is reproducible synthetic evidence, not field-validated production results.
+The four modules are designed as a closed loop: `01-hardening-checklist` defines the baselines and
+detection rules; `04-validation-lab` validates those rules **offline** (convert/compile, **enforced by
+CI**) and is **wired** to exercise them plus `02-integrity-monitor` on real Sysmon/WEF/Wazuh telemetry in
+an isolated venue-like environment (**live-telemetry runs are pending**); the resulting synthetic,
+human-reviewed lab evidence feeds `docs/pilot/` and `docs/cvp/` and informs `03-blog`. See
+[`04-validation-lab/COVERAGE.md`](04-validation-lab/COVERAGE.md) for the rule/checklist → lab mapping
+(**✅ proven** vs **◐ wired-unrun**). Lab output is reproducible synthetic evidence, not field-validated
+production results.
 
 ## Research Scope
 
@@ -69,7 +71,9 @@ The project does not provide legal advice. Operators in any jurisdiction should 
 
 ## External Verification
 
-The CafeSec Lab maintainer has completed OpenAI trusted access identity verification for authorized security work. This provides an external trust signal for legitimate defensive research workflows while the project continues to welcome additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities.
+The CafeSec Lab maintainer has completed OpenAI trusted-access identity verification for authorized security work. This is offered as **one** external trust signal — it is **not** an endorsement by OpenAI or any other provider, and it does not transfer to another provider's access decision. Reviewers should rely on their own identity process and the independently checkable identity chain in [`docs/cvp/evidence-pack.md`](docs/cvp/evidence-pack.md) (public GitHub history, HackerOne, role-based email on the controlled `cafeseclab.com` domain). The project welcomes additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities.
+
+CafeSec Lab is a **single-maintainer, best-effort** project (no SLA); see [`docs/maintenance/project-health.md`](docs/maintenance/project-health.md). Code and docs are MIT-licensed.
 
 ## What This Project Will Not Publish
 

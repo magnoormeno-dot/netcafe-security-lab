@@ -1,17 +1,17 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  创建完全隔离的 Hyper-V 私有(Private)虚拟交换机。这是整个环境合规的根本。
+  Creates a fully isolated Hyper-V private (Private) virtual switch. This is the foundation of the entire environment's compliance.
 .DESCRIPTION
-  为什么用 Private 而不是 Internal:
-    - Private  : 仅 VM <-> VM 互通。宿主机【不会】获得 vEthernet 虚拟网卡,
-                 因此宿主在网络栈层面根本不存在通往该网段的接口 —— 最强隔离。
-    - Internal : VM <-> VM 且 VM <-> 宿主。宿主会多一块 vEthernet 网卡(能 ping VM)。
-    - External : 桥接物理网卡,能上外网。【本实验严禁使用。】
-  对应你原计划里的 VirtualBox "Internal Network"(VM-only,不碰宿主),
-  Hyper-V 的等价且更严格选项就是 Private。
+  Why use Private instead of Internal:
+    - Private  : Only VM <-> VM connectivity. The host [does NOT] get a vEthernet virtual adapter,
+                 so at the network-stack level the host has no interface into this subnet at all -- the strongest isolation.
+    - Internal : VM <-> VM and VM <-> host. The host gains an extra vEthernet adapter (can ping the VMs).
+    - External : Bridges a physical adapter and can reach the internet. [Strictly forbidden in this lab.]
+  This corresponds to the VirtualBox "Internal Network" (VM-only, does not touch the host) in your original plan;
+  the equivalent and stricter Hyper-V option is Private.
 .NOTES
-  需要管理员。脚本幂等:同名交换机已存在则校验其类型而不重建。
+  Requires administrator. The script is idempotent: if a switch of the same name already exists, it validates its type instead of recreating it.
 #>
 [CmdletBinding()]
 param()
@@ -20,33 +20,33 @@ Assert-Admin
 $cfg = Get-LabConfig
 $name = $cfg.Network.SwitchName
 
-Write-Step "创建隔离私有交换机: $name ($($cfg.Network.Subnet))"
+Write-Step "Creating isolated private switch: $name ($($cfg.Network.Subnet))"
 
 $existing = Get-VMSwitch -Name $name -ErrorAction SilentlyContinue
 if ($existing) {
     if ($existing.SwitchType -eq 'Private') {
-        Write-Ok "交换机 '$name' 已存在且为 Private 类型。"
+        Write-Ok "Switch '$name' already exists and is of type Private."
     } else {
-        Write-Fail "交换机 '$name' 已存在但类型为 $($existing.SwitchType)(非 Private)!"
-        Write-Fail "这会破坏隔离。请先删除: Remove-VMSwitch -Name '$name' -Force,再重跑本脚本。"
+        Write-Fail "Switch '$name' already exists but is of type $($existing.SwitchType) (not Private)!"
+        Write-Fail "This breaks isolation. Please delete it first: Remove-VMSwitch -Name '$name' -Force, then rerun this script."
         return
     }
 } else {
     New-VMSwitch -Name $name -SwitchType Private | Out-Null
-    Write-Ok "已创建 Private 交换机 '$name'。"
+    Write-Ok "Created Private switch '$name'."
 }
 
-# --- 立即自检:确认宿主机没有因此获得通往隔离网段的虚拟网卡 ---
-Write-Step "自检:确认宿主未暴露在隔离网段"
+# --- Immediate self-check: confirm the host did not gain a virtual adapter into the isolated subnet ---
+Write-Step "Self-check: confirm the host is not exposed on the isolated subnet"
 $hostAdapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$name*" -or $_.InterfaceDescription -like "*$name*" }
 if ($hostAdapter) {
-    Write-Fail "宿主出现了与该交换机关联的虚拟网卡: $($hostAdapter.Name)"
-    Write-Fail "Private 交换机不应产生宿主 vNIC —— 请核查交换机类型!"
+    Write-Fail "The host has a virtual adapter associated with this switch: $($hostAdapter.Name)"
+    Write-Fail "A Private switch should not produce a host vNIC -- please verify the switch type!"
 } else {
-    Write-Ok "宿主机【无】对应该交换机的 vEthernet 网卡 —— 隔离前提成立。"
-    Write-Ok "即:宿主在网络层无法 ping 通隔离网内任何 VM。"
+    Write-Ok "The host has [no] vEthernet adapter for this switch -- the isolation precondition holds."
+    Write-Ok "That is: at the network layer the host cannot ping any VM on the isolated network."
 }
 
 Write-Host ""
 Get-VMSwitch -Name $name | Format-Table Name, SwitchType, AllowManagementOS -AutoSize
-Write-Step "下一步: 03-New-LabVMs.ps1  (创建 4 台 VM 并接入此交换机)"
+Write-Step "Next step: 03-New-LabVMs.ps1  (create the 4 VMs and attach them to this switch)"

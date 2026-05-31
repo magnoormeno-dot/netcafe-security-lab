@@ -1,49 +1,49 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  【破坏性】拆除 CafeSec Lab:删除 4 台 CSL 虚拟机、它们的 VHDX 以及隔离交换机。
+  [DESTRUCTIVE] Tears down the CafeSec Lab: removes the 4 CSL VMs, their VHDXs, and the isolated switch.
 .DESCRIPTION
-  这是清场脚本,会【永久删除】数据。设计上层层设防,确保只删该删的:
+  This is a teardown script that [PERMANENTLY DELETES] data. It is designed with layered safeguards to ensure only the intended objects are removed:
 
-    * 删除范围严格限定为 config\lab.psd1 中列出的 CSL VM、它们的虚拟硬盘
-      (位于 Paths.VmRoot,默认 E:\CafeSec-Lab\VMs),以及隔离交换机
-      (Network.SwitchName,默认 CafeSec-Isolated)。
-    * 【绝不】触碰任何非 CSL 虚拟机,【绝不】删除隔离交换机以外的任何交换机
-      (例如你阶段一用的 NAT/External 交换机会被原样保留)。
-    * 删除前先把正在运行的目标 VM 关机(优先正常关机,超时则强制关机)。
-    * 删 VM 后单独删除其 VHDX —— 因为 Remove-VM 只删配置/注册,VHDX 文件不会被一并删除。
-    * 只删空的 VM 子目录;非空目录(可能有你额外放进去的东西)保留并提示。
+    * Deletion scope is strictly limited to the CSL VMs listed in config\lab.psd1, their virtual hard disks
+      (under Paths.VmRoot, default E:\CafeSec-Lab\VMs), and the isolated switch
+      (Network.SwitchName, default CafeSec-Isolated).
+    * It [NEVER] touches any non-CSL VM and [NEVER] deletes any switch other than the isolated switch
+      (for example, the NAT/External switch you used in Stage 1 is left untouched).
+    * Before deleting, it shuts down any running target VMs (graceful shutdown first, forced shutdown on timeout).
+    * After removing a VM, it deletes its VHDX separately -- because Remove-VM only removes the config/registration; the VHDX file is not deleted along with it.
+    * It only removes empty VM subdirectories; non-empty directories (which may contain things you added yourself) are kept and reported.
 
-  确认机制(三选一,缺一不可):
-    -WhatIf         只预览将删除的清单,不做任何改动(可单独使用,最安全的"看一眼")。
-    -Force          显式表示"我确认要删",跳过交互式输入(适合脚本化/无人值守)。
-    交互式          以上都不给时,脚本会列清单并要求你【手动输入大写 DELETE】才会执行。
+  Confirmation mechanism (pick exactly one, one is required):
+    -WhatIf         Only previews the list of objects to be deleted, making no changes (can be used on its own; the safest "quick look").
+    -Force          Explicitly states "I confirm the deletion", skipping interactive input (suitable for scripting/unattended runs).
+    Interactive     When none of the above is given, the script lists the objects and requires you to [manually type DELETE in uppercase] before it proceeds.
 .PARAMETER WhatIf
-  演练模式:打印将要删除的所有对象,但不实际删除。优先级最高(给了就只预览)。
+  Dry-run mode: prints all objects that would be deleted, but does not actually delete them. Highest priority (if given, it only previews).
 .PARAMETER Force
-  非交互确认开关。给了 -Force 即视为已同意删除,不再要求输入 DELETE。
-  (改名自 -Confirm:-Confirm 是 PowerShell 保留通用参数,其约定语义是"删除前逐项询问",
-   与本处"跳过询问直接删"相反,易误用,故改用 -Force。)
+  Non-interactive confirmation switch. Passing -Force is treated as consent to delete, and DELETE is no longer requested.
+  (Renamed from -Confirm: -Confirm is a PowerShell reserved common parameter whose conventional semantics are "prompt for each item before deletion",
+   which is the opposite of this script's "skip the prompt and delete directly"; this is easily misused, so -Force is used instead.)
 .PARAMETER ShutdownTimeoutSec
-  正常关机的等待秒数,超时后强制关机(Stop-VM -Force)。默认 120。
+  Seconds to wait for a graceful shutdown before forcing it off (Stop-VM -Force). Default 120.
 .EXAMPLE
-  # 先看一眼会删什么(强烈建议第一步)
+  # Take a look at what would be deleted first (strongly recommended as the first step)
   .\Reset-Lab.ps1 -WhatIf
 .EXAMPLE
-  # 交互确认:脚本列清单后要求你输入 DELETE
+  # Interactive confirmation: the script lists the objects and then requires you to type DELETE
   .\Reset-Lab.ps1
 .EXAMPLE
-  # 无人值守:已明确知道后果,直接执行
+  # Unattended: you already understand the consequences, execute directly
   .\Reset-Lab.ps1 -Force
 .NOTES
-  需要管理员。沿用 lib\Common.ps1 的 Get-LabConfig / Write-* 约定。
-  本脚本【不】使用 CmdletBinding 的 SupportsShouldProcess,改为自管 -WhatIf / -Force,
-  以便严格按规范实现"显式 -Force 或交互式输入 DELETE"的双重确认语义。
+  Requires administrator. Follows the Get-LabConfig / Write-* conventions from lib\Common.ps1.
+  This script does [NOT] use CmdletBinding's SupportsShouldProcess; it manages -WhatIf / -Force itself,
+  in order to strictly implement the dual-confirmation semantics of "explicit -Force or interactive DELETE input" per the spec.
 #>
 [CmdletBinding()]
 param(
     [switch]$WhatIf,
-    [switch]$Force,            # 非交互确认:给了即视为已同意删除。改名自 -Confirm,避免占用保留名并反转其语义。
+    [switch]$Force,            # Non-interactive confirmation: passing it is treated as consent to delete. Renamed from -Confirm to avoid taking the reserved name and inverting its semantics.
     [int]$ShutdownTimeoutSec = 120
 )
 
@@ -55,21 +55,21 @@ $vmRoot         = $cfg.Paths.VmRoot
 $isolatedSwitch = $cfg.Network.SwitchName
 $cslNames       = @($cfg.VMs | ForEach-Object { $_.Name })
 
-Write-Step "CafeSec Lab 拆除 (Reset-Lab) —— 破坏性操作"
-Write-Warn2 "本操作会【永久删除】下列对象。请仔细核对清单。"
+Write-Step "CafeSec Lab teardown (Reset-Lab) -- destructive operation"
+Write-Warn2 "This operation will [PERMANENTLY DELETE] the objects below. Please review the list carefully."
 
 # =====================================================================
-# 1) 盘点将被删除的对象(只读,不改动)
+# 1) Inventory the objects to be deleted (read-only, no changes)
 # =====================================================================
 
-# --- 1a. 目标 VM:仅限配置清单里、且确实存在于宿主上的 CSL VM ---
+# --- 1a. Target VMs: only CSL VMs that are in the config list and actually exist on the host ---
 $targetVMs = @()
 foreach ($name in $cslNames) {
     $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
     if ($vm) { $targetVMs += $vm }
 }
 
-# --- 1b. 这些 VM 当前挂载的 VHDX(Remove-VM 不会删它们,需单独删)---
+# --- 1b. The VHDXs currently attached to these VMs (Remove-VM will not delete them, so they must be deleted separately) ---
 $targetVhds = @()
 foreach ($vm in $targetVMs) {
     foreach ($hd in (Get-VMHardDiskDrive -VMName $vm.Name -ErrorAction SilentlyContinue)) {
@@ -77,7 +77,7 @@ foreach ($vm in $targetVMs) {
     }
 }
 
-# --- 1c. 兜底:扫 Paths.VmRoot 下各 CSL VM 子目录里的 *.vhdx / *.avhdx(含检查点差分盘,防止残留)---
+# --- 1c. Fallback: scan for *.vhdx / *.avhdx in each CSL VM subdirectory under Paths.VmRoot (including checkpoint differencing disks, to prevent leftovers) ---
 if (Test-Path $vmRoot) {
     foreach ($name in $cslNames) {
         $vmDir = Join-Path $vmRoot $name
@@ -87,13 +87,13 @@ if (Test-Path $vmRoot) {
         }
     }
 }
-# 去重(同一盘可能既被挂载又被目录扫描命中)
+# Deduplicate (the same disk may be matched both by being attached and by the directory scan)
 $targetVhds = @($targetVhds | Sort-Object -Unique)
 
-# --- 1d. 隔离交换机(仅此一个;NAT/External 等绝不在此列)---
+# --- 1d. Isolated switch (this one only; NAT/External etc. are never in this list) ---
 $targetSwitch = Get-VMSwitch -Name $isolatedSwitch -ErrorAction SilentlyContinue
 
-# --- 1e. 删 VM 后可清理的【空】子目录 ---
+# --- 1e. [Empty] subdirectories that can be cleaned up after removing the VMs ---
 $targetDirs = @()
 if (Test-Path $vmRoot) {
     foreach ($name in $cslNames) {
@@ -103,88 +103,88 @@ if (Test-Path $vmRoot) {
 }
 
 # =====================================================================
-# 2) 打印清单
+# 2) Print the list
 # =====================================================================
-Write-Step "将删除的【虚拟机】(仅 CSL,配置清单内且存在的)"
+Write-Step "[Virtual machines] to be deleted (CSL only, in the config list and existing)"
 if ($targetVMs.Count -gt 0) {
     $targetVMs | Format-Table Name, State,
         @{n = 'MemGB'; e = { [math]::Round($_.MemoryStartup / 1GB, 0) } },
         @{n = 'Switch'; e = { (Get-VMNetworkAdapter -VMName $_.Name | Select-Object -First 1).SwitchName } } -AutoSize
 } else {
-    Write-Host "  (无:这些 CSL VM 目前都不存在)" -ForegroundColor Gray
+    Write-Host "  (none: none of these CSL VMs currently exist)" -ForegroundColor Gray
 }
 
-Write-Step "将删除的【虚拟硬盘 VHDX】(位于 $vmRoot)"
+Write-Step "[Virtual hard disks (VHDX)] to be deleted (under $vmRoot)"
 if ($targetVhds.Count -gt 0) {
     $targetVhds | ForEach-Object {
         $size = if (Test-Path $_) { '{0:N1} GB' -f ((Get-Item $_).Length / 1GB) } else { '?' }
         Write-Host ("  - {0}  [{1}]" -f $_, $size)
     }
 } else {
-    Write-Host "  (无)" -ForegroundColor Gray
+    Write-Host "  (none)" -ForegroundColor Gray
 }
 
-Write-Step "将删除的【隔离交换机】(仅此一个)"
+Write-Step "[Isolated switch] to be deleted (this one only)"
 if ($targetSwitch) {
-    Write-Host ("  - {0}  (类型 {1})" -f $targetSwitch.Name, $targetSwitch.SwitchType)
+    Write-Host ("  - {0}  (type {1})" -f $targetSwitch.Name, $targetSwitch.SwitchType)
 } else {
-    Write-Host "  (无:'$isolatedSwitch' 当前不存在)" -ForegroundColor Gray
+    Write-Host "  (none: '$isolatedSwitch' does not currently exist)" -ForegroundColor Gray
 }
 
-Write-Step "将清理的【空目录】(仅当删盘后变空时)"
+Write-Step "[Empty directories] to be cleaned up (only if they become empty after the disks are deleted)"
 if ($targetDirs.Count -gt 0) {
     $targetDirs | ForEach-Object { Write-Host ("  - {0}" -f $_) }
 } else {
-    Write-Host "  (无)" -ForegroundColor Gray
+    Write-Host "  (none)" -ForegroundColor Gray
 }
 
-# 明确告知:不会动的东西。
+# Explicitly state what will not be touched.
 Write-Host ""
-Write-Warn2 "以下对象【不会】被触碰:任何非 CSL 虚拟机、隔离交换机以外的任何交换机(含你的 NAT/External)、$vmRoot 下的非空/无关目录。"
+Write-Warn2 "The following will [NOT] be touched: any non-CSL virtual machine, any switch other than the isolated switch (including your NAT/External), and any non-empty/unrelated directories under $vmRoot."
 
-# 没有任何东西可删,直接收工。
+# Nothing to delete, finish right away.
 if ($targetVMs.Count -eq 0 -and $targetVhds.Count -eq 0 -and -not $targetSwitch) {
-    Write-Ok "没有发现任何可删除的 CafeSec 对象,环境已是干净状态。无需操作。"
+    Write-Ok "No deletable CafeSec objects were found; the environment is already clean. No action needed."
     return
 }
 
 # =====================================================================
-# 3) -WhatIf:只预览,绝不改动
+# 3) -WhatIf: preview only, never change anything
 # =====================================================================
 if ($WhatIf) {
-    Write-Step "WhatIf 演练模式"
-    Write-Ok "以上为将要删除的完整清单。当前为 -WhatIf,未做任何改动。"
-    Write-Host "确认无误后,去掉 -WhatIf 重跑(交互输入 DELETE),或加 -Force 直接执行。" -ForegroundColor Gray
+    Write-Step "WhatIf dry-run mode"
+    Write-Ok "The above is the complete list of objects that would be deleted. This is a -WhatIf run; nothing was changed."
+    Write-Host "Once confirmed, remove -WhatIf and rerun (typing DELETE interactively), or add -Force to execute directly." -ForegroundColor Gray
     return
 }
 
 # =====================================================================
-# 4) 确认门:-Confirm 显式同意,否则要求交互输入大写 DELETE
+# 4) Confirmation gate: -Confirm for explicit consent, otherwise require typing DELETE in uppercase interactively
 # =====================================================================
 if (-not $Force) {
-    Write-Step "最终确认"
-    Write-Warn2 "这将【永久删除】上面列出的 VM、VHDX 与隔离交换机,且不可恢复。"
-    $answer = Read-Host "若确认删除,请【完整输入大写】 DELETE 后回车(其它任何输入都会取消)"
+    Write-Step "Final confirmation"
+    Write-Warn2 "This will [PERMANENTLY DELETE] the VMs, VHDXs, and isolated switch listed above, and is not recoverable."
+    $answer = Read-Host "To confirm deletion, [type DELETE in full uppercase] and press Enter (any other input will cancel)"
     if ($answer -cne 'DELETE') {
-        Write-Fail "未输入 DELETE(收到:'$answer')。已取消,未做任何改动。"
+        Write-Fail "DELETE was not entered (received: '$answer'). Cancelled, no changes made."
         return
     }
-    Write-Ok "已收到 DELETE 确认。"
+    Write-Ok "DELETE confirmation received."
 } else {
-    Write-Warn2 "已通过 -Force 显式确认,跳过交互输入,开始执行删除。"
+    Write-Warn2 "Explicitly confirmed via -Force; skipping interactive input and starting the deletion."
 }
 
 # =====================================================================
-# 5) 执行删除
+# 5) Perform the deletion
 # =====================================================================
 
-# --- 5a. 先关机(只关目标 VM)---
-Write-Step "停止正在运行的目标 VM"
+# --- 5a. Shut down first (only the target VMs) ---
+Write-Step "Stopping running target VMs"
 foreach ($vm in $targetVMs) {
     $live = Get-VM -Name $vm.Name -ErrorAction SilentlyContinue
     if ($live -and $live.State -ne 'Off') {
-        Write-Host "  关闭 $($vm.Name)(当前 $($live.State))..."
-        # 先尝试正常关机(走集成服务),给一定等待时间。
+        Write-Host "  Shutting down $($vm.Name) (currently $($live.State))..."
+        # Try a graceful shutdown first (via integration services), allowing some wait time.
         Stop-VM -Name $vm.Name -ErrorAction SilentlyContinue
         $deadline = (Get-Date).AddSeconds($ShutdownTimeoutSec)
         while ((Get-Date) -lt $deadline) {
@@ -193,68 +193,68 @@ foreach ($vm in $targetVMs) {
             Start-Sleep -Seconds 3
         }
         if ((Get-VM -Name $vm.Name -ErrorAction SilentlyContinue).State -ne 'Off') {
-            Write-Warn2 "  $($vm.Name) 正常关机超时($ShutdownTimeoutSec s),改为强制关机。"
+            Write-Warn2 "  $($vm.Name) graceful shutdown timed out ($ShutdownTimeoutSec s); forcing it off instead."
             Stop-VM -Name $vm.Name -TurnOff -Force -ErrorAction SilentlyContinue
         }
-        Write-Ok "  $($vm.Name) 已停止。"
+        Write-Ok "  $($vm.Name) stopped."
     } else {
-        Write-Ok "  $($vm.Name) 已是关机状态。"
+        Write-Ok "  $($vm.Name) is already off."
     }
 }
 
-# --- 5b. 删除 VM(注意:Remove-VM 只删配置/注册,不删 VHDX)---
-Write-Step "删除虚拟机(仅 CSL)"
+# --- 5b. Remove the VMs (note: Remove-VM only removes the config/registration, not the VHDX) ---
+Write-Step "Removing virtual machines (CSL only)"
 foreach ($vm in $targetVMs) {
-    # 用 try/catch:单台删除失败时报告并继续,不让整次拆除半途中止(与 5c 删盘逻辑一致)。
+    # Use try/catch: report and continue if a single removal fails, so the whole teardown is not aborted midway (consistent with the disk-deletion logic in 5c).
     try {
         Remove-VM -Name $vm.Name -Force -ErrorAction Stop
-        Write-Ok "  已删除 VM '$($vm.Name)'(其 VHDX 将在下一步单独删除)。"
+        Write-Ok "  Removed VM '$($vm.Name)' (its VHDX will be deleted separately in the next step)."
     } catch {
-        Write-Fail "  无法删除 VM '$($vm.Name)': $($_.Exception.Message)"
+        Write-Fail "  Failed to remove VM '$($vm.Name)': $($_.Exception.Message)"
     }
 }
 
-# --- 5c. 删除 VHDX 文件 ---
-Write-Step "删除虚拟硬盘 VHDX"
+# --- 5c. Delete the VHDX files ---
+Write-Step "Deleting virtual hard disks (VHDX)"
 foreach ($path in $targetVhds) {
     if (Test-Path $path) {
         try {
             Remove-Item -LiteralPath $path -Force -ErrorAction Stop
-            Write-Ok "  已删除 $path"
+            Write-Ok "  Deleted $path"
         } catch {
-            Write-Fail "  无法删除 $path : $($_.Exception.Message)"
+            Write-Fail "  Failed to delete $path : $($_.Exception.Message)"
         }
     } else {
-        Write-Warn2 "  跳过(文件已不存在):$path"
+        Write-Warn2 "  Skipped (file no longer exists): $path"
     }
 }
 
-# --- 5d. 清理空的 VM 子目录(非空则保留)---
-Write-Step "清理空目录"
+# --- 5d. Clean up empty VM subdirectories (keep non-empty ones) ---
+Write-Step "Cleaning up empty directories"
 foreach ($dir in $targetDirs) {
     if (Test-Path $dir) {
         $remaining = @(Get-ChildItem -LiteralPath $dir -Force -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer })
         if ($remaining.Count -eq 0) {
             Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Ok "  已删除空目录 $dir"
+            Write-Ok "  Removed empty directory $dir"
         } else {
-            Write-Warn2 "  保留 $dir(仍有 $($remaining.Count) 个文件,非 CafeSec 创建的内容不予删除)。"
+            Write-Warn2 "  Keeping $dir (still has $($remaining.Count) file(s); content not created by CafeSec will not be deleted)."
         }
     }
 }
 
-# --- 5e. 删除隔离交换机(且仅删这一个)---
-Write-Step "删除隔离交换机"
+# --- 5e. Remove the isolated switch (and only this one) ---
+Write-Step "Removing the isolated switch"
 if ($targetSwitch) {
     Remove-VMSwitch -Name $targetSwitch.Name -Force -ErrorAction Stop
-    Write-Ok "  已删除交换机 '$($targetSwitch.Name)'。"
+    Write-Ok "  Removed switch '$($targetSwitch.Name)'."
 } else {
-    Write-Host "  (无隔离交换机可删)" -ForegroundColor Gray
+    Write-Host "  (no isolated switch to remove)" -ForegroundColor Gray
 }
 
 # =====================================================================
-# 6) 收尾
+# 6) Wrap-up
 # =====================================================================
-Write-Step "拆除完成"
-Write-Ok "CafeSec Lab 已清场。非 CSL 的 VM 与隔离交换机以外的交换机均未受影响。"
-Write-Host "如需重建:02-New-IsolatedSwitch.ps1  ->  03-New-LabVMs.ps1。" -ForegroundColor Gray
+Write-Step "Teardown complete"
+Write-Ok "CafeSec Lab has been cleaned up. Non-CSL VMs and switches other than the isolated switch were left unaffected."
+Write-Host "To rebuild: 02-New-IsolatedSwitch.ps1  ->  03-New-LabVMs.ps1." -ForegroundColor Gray

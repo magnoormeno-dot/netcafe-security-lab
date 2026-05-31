@@ -1,37 +1,37 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  CafeSec Lab 宿主侧一键编排:按序运行 00→04 主机脚本(预检 → 启用 Hyper-V → 建隔离交换机
-  → 建 VM → 宿主侧隔离验证),自动处理 Hyper-V 启用后的重启关口,并在结束时给出 VM 内 / 域 的后续指引。
+  CafeSec Lab host-side one-click orchestration: runs host scripts 00->04 in order (preflight -> enable Hyper-V -> create isolated switch
+  -> create VMs -> host-side isolation verification), automatically handles the reboot gate after enabling Hyper-V, and prints follow-up guidance for in-VM / domain steps at the end.
 
 .DESCRIPTION
-  本脚本只编排【宿主侧】可自动化的步骤。VM 内的步骤(装系统、配静态 IP、域控提升 / 加域、
-  部署 Sysmon/Wazuh/WEF、规则引擎)无法从宿主代跑 —— 结束时会列出清单与文档指引。
+  This script only orchestrates the [host-side] steps that can be automated. In-VM steps (installing the OS, configuring static IPs, promoting the domain controller / joining the domain,
+  deploying Sysmon/Wazuh/WEF, the rule engines) cannot be run from the host on your behalf -- at the end it lists the checklist and documentation pointers.
 
-  设计:
-    * 每个子步骤在【独立 powershell.exe 子进程】中运行 —— 隔离子脚本里的 `exit`(如 04 用 exit $fail),
-      避免其终止本编排会话;用子进程 ExitCode 判定成败。子脚本输出实时显示在本控制台。
-    * 幂等:所有子脚本可重复运行;启用 Hyper-V 需重启时本脚本会停下,重启后再次运行即从断点继续。
-    * 安全:-DryRun 只打印计划不执行(且无需管理员);硬性步骤失败立即停止;破坏性操作不在本脚本内。
+  Design:
+    * Each substep runs in an [isolated powershell.exe child process] -- this isolates `exit` inside substeps (e.g. 04 uses exit $fail),
+      preventing them from terminating this orchestration session; success/failure is determined from the child process ExitCode. Substep output is displayed live in this console.
+    * Idempotent: all substeps can be run repeatedly; when enabling Hyper-V requires a reboot, this script stops, and running it again after the reboot resumes from where it left off.
+    * Safety: -DryRun only prints the plan without executing (and does not require administrator); a failed hard step stops immediately; destructive operations are not part of this script.
 
 .PARAMETER StartAt
-  起始步骤号(0-4),默认 0。重启后可用 -StartAt 2 跳过已完成步骤(直接重跑也安全,子脚本幂等)。
+  Starting step number (0-4), default 0. After a reboot you can use -StartAt 2 to skip completed steps (re-running directly is also safe, since substeps are idempotent).
 .PARAMETER StopAt
-  结束步骤号(0-4),默认 4。
+  Ending step number (0-4), default 4.
 .PARAMETER DryRun
-  只打印将要执行的步骤与命令,不实际运行任何子脚本(无需管理员,适合先预览)。
+  Only prints the steps and commands that would be executed, without actually running any substep (no administrator required, good for a preview first).
 .PARAMETER VmWhatIf
-  给步骤 3(建 VM)传 -WhatIf,只预览将创建的 VM 而不实际创建。
+  Passes -WhatIf to step 3 (create VMs), only previewing the VMs that would be created without actually creating them.
 .PARAMETER NoPrompt
-  非交互:跳过开始前的确认。
+  Non-interactive: skips the confirmation before starting.
 .EXAMPLE
-  .\Invoke-LabSetup.ps1 -DryRun          # 先看计划(无需管理员)
+  .\Invoke-LabSetup.ps1 -DryRun          # Review the plan first (no administrator required)
 .EXAMPLE
-  .\Invoke-LabSetup.ps1                   # 管理员下实际编排 00→04
+  .\Invoke-LabSetup.ps1                   # Actually orchestrate 00->04 as administrator
 .EXAMPLE
-  .\Invoke-LabSetup.ps1 -StartAt 2        # 启用 Hyper-V 重启后,从"建交换机"继续
+  .\Invoke-LabSetup.ps1 -StartAt 2        # After the Hyper-V enable reboot, resume from "create switch"
 .NOTES
-  实际执行需管理员(-DryRun 除外)。本脚本只覆盖宿主侧;域 / 防御栈见 README 的 D–G 与 docs\03。
+  Actual execution requires administrator (except -DryRun). This script only covers the host side; for the domain / defense stack see sections D-G of the README and docs\03.
 #>
 [CmdletBinding()]
 param(
@@ -43,7 +43,7 @@ param(
 )
 . "$PSScriptRoot\lib\Common.ps1"
 
-# 在独立子进程里跑一个宿主脚本:隔离其 exit、捕获 ExitCode、输出直通控制台。
+# Run a host script in an isolated child process: isolate its exit, capture the ExitCode, pass output straight through to the console.
 function Invoke-HostStep {
     param(
         [int]$Num,
@@ -53,10 +53,10 @@ function Invoke-HostStep {
     )
     $path = Join-Path $PSScriptRoot $ScriptName
     Write-Host ""
-    Write-Host ("===== 步骤 {0} / {1} =====" -f $Num, $Title) -ForegroundColor Magenta
+    Write-Host ("===== Step {0} / {1} =====" -f $Num, $Title) -ForegroundColor Magenta
     Write-Host ("  -> {0} {1}" -f $ScriptName, ($ScriptArgs -join ' ')) -ForegroundColor DarkGray
-    if (-not (Test-Path $path)) { Write-Fail "找不到脚本: $path"; return 1 }
-    if ($DryRun) { Write-Warn2 "  [DryRun] 不实际执行。"; return 0 }
+    if (-not (Test-Path $path)) { Write-Fail "Script not found: $path"; return 1 }
+    if ($DryRun) { Write-Warn2 "  [DryRun] Not actually executing."; return 0 }
 
     $argLine = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $path
     if ($ScriptArgs.Count) { $argLine += ' ' + ($ScriptArgs -join ' ') }
@@ -64,49 +64,49 @@ function Invoke-HostStep {
     if ($null -ne $p.ExitCode) { return [int]$p.ExitCode } else { return 0 }
 }
 
-# DryRun 无需管理员(只预览);实际执行才要求管理员。
+# DryRun requires no administrator (preview only); only actual execution requires administrator.
 if (-not $DryRun) { Assert-Admin }
-Get-LabConfig | Out-Null   # 提前校验 lab.psd1 可加载(各子脚本运行时再各自读取)
+Get-LabConfig | Out-Null   # Validate up front that lab.psd1 can be loaded (each substep reads it again on its own at runtime)
 
-Write-Step "CafeSec Lab 宿主侧编排 (Invoke-LabSetup)"
-Write-Host ("范围: 步骤 {0} → {1}{2}" -f $StartAt, $StopAt, $(if ($DryRun) { '   [DryRun]' } else { '' })) -ForegroundColor Gray
-if ($StartAt -gt $StopAt) { Write-Fail "StartAt($StartAt) 大于 StopAt($StopAt)。"; return }
+Write-Step "CafeSec Lab host-side orchestration (Invoke-LabSetup)"
+Write-Host ("Range: step {0} -> {1}{2}" -f $StartAt, $StopAt, $(if ($DryRun) { '   [DryRun]' } else { '' })) -ForegroundColor Gray
+if ($StartAt -gt $StopAt) { Write-Fail "StartAt($StartAt) is greater than StopAt($StopAt)."; return }
 
-# ---- 前置硬性检查(locale-safe;不满足直接停)----
+# ---- Mandatory prerequisite checks (locale-safe; stop immediately if unmet) ----
 $edition = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
 if ($edition -match '^Core') {
-    Write-Fail "当前为 Home 版($edition),不含 Hyper-V。需要 Pro/Enterprise/Education/Server。"
+    Write-Fail "This is the Home edition ($edition), which does not include Hyper-V. Pro/Enterprise/Education/Server is required."
     return
 }
 $hvPresent = (Get-CimInstance Win32_ComputerSystem).HypervisorPresent
 $vtFw = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 if (-not ($hvPresent -or $vtFw)) {
-    Write-Fail "未检测到虚拟化(VT-x)。请进 BIOS/UEFI 开启 Intel VT-x 后重试。"
+    Write-Fail "Virtualization (VT-x) not detected. Enable Intel VT-x in the BIOS/UEFI and retry."
     return
 }
-Write-Ok ("前置检查通过: EditionID={0}, HypervisorPresent={1}" -f $edition, $hvPresent)
+Write-Ok ("Prerequisite checks passed: EditionID={0}, HypervisorPresent={1}" -f $edition, $hvPresent)
 
-# ---- 步骤计划 ----
+# ---- Step plan ----
 $vmArgs = if ($VmWhatIf) { @('-WhatIf') } else { @() }
 $steps = @(
-    @{ Num = 0; Title = '预检 (只读)';        Script = '00-Preflight-Check.ps1';   Args = @();           Advisory = $true;  RebootGate = $false }
-    @{ Num = 1; Title = '启用 Hyper-V';        Script = '01-Enable-HyperV.ps1';     Args = @('-NoPrompt');Advisory = $false; RebootGate = $true  }
-    @{ Num = 2; Title = '建隔离私有交换机';     Script = '02-New-IsolatedSwitch.ps1';Args = @();           Advisory = $false; RebootGate = $false }
-    @{ Num = 3; Title = '创建 4 台实验 VM';     Script = '03-New-LabVMs.ps1';        Args = $vmArgs;       Advisory = $false; RebootGate = $false }
-    @{ Num = 4; Title = '宿主侧隔离验证';       Script = '04-Verify-Isolation.ps1';  Args = @();           Advisory = $true;  RebootGate = $false }
+    @{ Num = 0; Title = 'Preflight (read-only)';        Script = '00-Preflight-Check.ps1';   Args = @();           Advisory = $true;  RebootGate = $false }
+    @{ Num = 1; Title = 'Enable Hyper-V';        Script = '01-Enable-HyperV.ps1';     Args = @('-NoPrompt');Advisory = $false; RebootGate = $true  }
+    @{ Num = 2; Title = 'Create isolated private switch';     Script = '02-New-IsolatedSwitch.ps1';Args = @();           Advisory = $false; RebootGate = $false }
+    @{ Num = 3; Title = 'Create 4 lab VMs';     Script = '03-New-LabVMs.ps1';        Args = $vmArgs;       Advisory = $false; RebootGate = $false }
+    @{ Num = 4; Title = 'Host-side isolation verification';       Script = '04-Verify-Isolation.ps1';  Args = @();           Advisory = $true;  RebootGate = $false }
 )
 
-# 打印计划
-Write-Host "`n将按序编排(仅宿主侧):" -ForegroundColor Cyan
+# Print the plan
+Write-Host "`nWill orchestrate in order (host side only):" -ForegroundColor Cyan
 $steps | Where-Object { $_.Num -ge $StartAt -and $_.Num -le $StopAt } |
     ForEach-Object { Write-Host ("  [{0}] {1}  ({2})" -f $_.Num, $_.Title, $_.Script) -ForegroundColor Gray }
 
 if (-not $NoPrompt -and -not $DryRun) {
-    $ans = Read-Host "`n开始执行? [y/N]"
-    if ($ans -notmatch '^(y|Y)') { Write-Warn2 "已取消。"; return }
+    $ans = Read-Host "`nStart execution? [y/N]"
+    if ($ans -notmatch '^(y|Y)') { Write-Warn2 "Cancelled."; return }
 }
 
-# ---- 执行 ----
+# ---- Execution ----
 $results = @()
 foreach ($s in $steps) {
     if ($s.Num -lt $StartAt -or $s.Num -gt $StopAt) { continue }
@@ -116,67 +116,67 @@ foreach ($s in $steps) {
     $status = if ($ok) { 'OK' } elseif ($s.Advisory) { 'WARN' } else { 'FAIL' }
     $results += [pscustomobject]@{ Step = $s.Num; Title = $s.Title; ExitCode = $code; Status = $status }
 
-    # Hyper-V 重启关口:启用后,创建交换机/VM 依赖 vmms 服务运行 + Hyper-V 模块就绪。
+    # Hyper-V reboot gate: after enabling, creating the switch/VMs depends on the vmms service running + the Hyper-V module being ready.
     if ($s.RebootGate -and -not $DryRun) {
         $vmms = Get-Service vmms -ErrorAction SilentlyContinue
         $usable = $vmms -and $vmms.Status -eq 'Running' -and (Get-Command New-VMSwitch -ErrorAction SilentlyContinue)
         $rebootPending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
         if (-not $usable -or $rebootPending) {
             Write-Host ""
-            Write-Warn2 "Hyper-V 已启用,但需要【重启】后才能继续(vmms 服务/Hyper-V 模块尚未就绪)。"
-            Write-Host  "请重启本机,然后重新运行(子脚本幂等,会自动跳过已完成步骤):" -ForegroundColor Yellow
-            Write-Host  "    .\Invoke-LabSetup.ps1            # 或   .\Invoke-LabSetup.ps1 -StartAt 2" -ForegroundColor Yellow
-            Write-Step "已在重启关口暂停"
+            Write-Warn2 "Hyper-V is enabled, but a [reboot] is required before continuing (the vmms service / Hyper-V module is not ready yet)."
+            Write-Host  "Reboot this machine, then re-run (substeps are idempotent and will automatically skip completed steps):" -ForegroundColor Yellow
+            Write-Host  "    .\Invoke-LabSetup.ps1            # or   .\Invoke-LabSetup.ps1 -StartAt 2" -ForegroundColor Yellow
+            Write-Step "Paused at the reboot gate"
             $results | Format-Table Step, Title, ExitCode, Status -AutoSize
             return
         }
-        Write-Ok "Hyper-V 就绪(vmms 运行中),继续。"
+        Write-Ok "Hyper-V is ready (vmms running), continuing."
     }
 
-    # 硬性步骤失败 -> 停止;提示性步骤失败 -> 仅告警继续。
+    # Hard step failure -> stop; advisory step failure -> warn only and continue.
     if (-not $ok -and -not $s.Advisory) {
         Write-Host ""
-        Write-Fail "步骤 $($s.Num)($($s.Title))失败(ExitCode=$code)。已停止编排,请排查后重跑。"
+        Write-Fail "Step $($s.Num) ($($s.Title)) failed (ExitCode=$code). Orchestration stopped; investigate and re-run."
         break
     }
     if (-not $ok -and $s.Advisory) {
-        Write-Warn2 "步骤 $($s.Num)($($s.Title))返回非零(ExitCode=$code);该步为提示性,继续。"
+        Write-Warn2 "Step $($s.Num) ($($s.Title)) returned non-zero (ExitCode=$code); this step is advisory, continuing."
     }
 }
 
-# ---- 汇总 ----
-Write-Step "编排汇总"
+# ---- Summary ----
+Write-Step "Orchestration summary"
 $results | Format-Table Step, Title, ExitCode, Status -AutoSize
 
 if ($DryRun) {
-    Write-Warn2 "DryRun 结束:以上为计划,未做任何改动。去掉 -DryRun 并以管理员运行以实际编排。"
+    Write-Warn2 "DryRun complete: the above is the plan, no changes were made. Remove -DryRun and run as administrator to actually orchestrate."
 }
 
-# ---- 后续步骤(VM 内 / 域 —— 无法从宿主代跑)----
-Write-Step "后续步骤(VM 内 / 域)"
+# ---- Follow-up steps (in-VM / domain -- cannot be run from the host on your behalf) ----
+Write-Step "Follow-up steps (in-VM / domain)"
 Write-Host @'
-宿主侧脚手架就位后(隔离交换机 + 4 台 VM),按 README 的 D–G 继续:
+Once the host-side scaffolding is in place (isolated switch + 4 VMs), continue per sections D-G of the README:
 
-  阶段一(临时联网装系统/工具):
-    .\Switch-LabNetwork.ps1 -Phase Provisioning -ProvisioningSwitch <你的NAT交换机>
-    - 逐台开机装 OS;按 docs\downloads.md 下载并安装 Sysmon / Wazuh agent / 工具
-    - 离线注入工具可用 .\New-PayloadIso.ps1 打包成 ISO
+  Phase one (temporary network connectivity to install the OS/tools):
+    .\Switch-LabNetwork.ps1 -Phase Provisioning -ProvisioningSwitch <your NAT switch>
+    - Power on each machine and install the OS; per docs\downloads.md download and install Sysmon / Wazuh agent / tools
+    - For offline tool injection you can use .\New-PayloadIso.ps1 to package them into an ISO
 
-  建域(见 docs\03-domain-and-wef.md):
+  Build the domain (see docs\03-domain-and-wef.md):
     CSL-Server:  .\domain\Install-DomainController.ps1 -SafeModePassword (Read-Host -AsSecureString)
-                 重启后:  .\domain\Set-DcDnsAirgap.ps1
-    客户机:      .\domain\Join-LabDomain.ps1 -DomainCredential (Get-Credential CAFESEC\Administrator)
+                 After reboot:  .\domain\Set-DcDnsAirgap.ps1
+    Clients:      .\domain\Join-LabDomain.ps1 -DomainCredential (Get-Credential CAFESEC\Administrator)
 
-  防御栈:
+  Defense stack:
     Ubuntu:      bash scripts/wazuh/install-wazuh-manager.sh
     Windows:     guest\Deploy-Sysmon.ps1  /  guest\Install-WazuhAgent.ps1
-    域控:        guest\Configure-WEC-Collector.ps1  ->  domain\New-WefGpo.ps1
-    分析侧:      analysis\Setup-RuleEngines.ps1
+    Domain controller:        guest\Configure-WEC-Collector.ps1  ->  domain\New-WefGpo.ps1
+    Analysis side:      analysis\Setup-RuleEngines.ps1
 
-  阶段二(锁定隔离并验证):
+  Phase two (lock down isolation and verify):
     .\Switch-LabNetwork.ps1 -Phase Isolated
-    各 VM 配静态 IP(域成员加 -DnsServer 10.10.10.20;域控 -DnsServer 127.0.0.1)
-    宿主侧:  .\04-Verify-Isolation.ps1
-    各 VM 内: Windows -> guest\Test-GuestIsolation.ps1 ; Ubuntu -> wazuh/test-guest-isolation.sh
-    >> 宿主侧 + 客户机侧两边全 PASS 才算隔离合规,之后方可进行研究。<<
+    Configure a static IP on each VM (domain members add -DnsServer 10.10.10.20; the domain controller -DnsServer 127.0.0.1)
+    Host side:  .\04-Verify-Isolation.ps1
+    Inside each VM: Windows -> guest\Test-GuestIsolation.ps1 ; Ubuntu -> wazuh/test-guest-isolation.sh
+    >> Isolation is compliant only when both the host side and the client side fully PASS; only then may research proceed. <<
 '@ -ForegroundColor Gray

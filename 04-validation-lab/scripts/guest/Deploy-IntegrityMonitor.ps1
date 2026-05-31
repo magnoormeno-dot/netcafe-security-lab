@@ -1,32 +1,40 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  接缝②:把主仓 02-integrity-monitor(CafeSec 完整性监控)部署进靶场 Windows VM,
-  建立 billing 路径基线并扫描 —— 用真实 Sysmon/事件日志替代其合成 fixtures。
+  Seam (2): Deploy the main repo's 02-integrity-monitor (CafeSec integrity monitoring) into the
+  range Windows VM, establish a billing-path baseline, and scan -- replacing its synthetic
+  fixtures with real Sysmon/event log data.
 .DESCRIPTION
-  在靶场 Windows 客户机内运行。它创建独立 venv、可编辑安装该工具(含 windows 额外依赖),
-  生成 HMAC 签名密钥与基线,然后对一个 billing 风格的路径扫描。
-  入口用 `python -m integrity_monitor`(包内置 __main__),不依赖 Scripts 目录是否在 PATH。
+  Runs inside the range Windows guest. It creates an isolated venv, installs the tool in editable
+  mode (including the windows extra dependencies), generates an HMAC signing key and a baseline,
+  then scans a billing-style path.
+  The entry point uses `python -m integrity_monitor` (the package's built-in __main__), so it does
+  not depend on whether the Scripts directory is on PATH.
 
-  两阶段说明:pip 依赖(blake3/click/psutil/pyyaml/requests/pywin32/python-evtx)需要联网,
-  请在【阶段一(临时联网)】部署;或用 -WheelDir 指定离线 wheel 目录做断网安装。
-  本工具是保守的防御监控:只读取/哈希/比对,不修改/绕过/篡改任何 billing 软件。
+  Two-phase note: the pip dependencies (blake3/click/psutil/pyyaml/requests/pywin32/python-evtx)
+  require network access, so deploy during [Phase 1 (temporary connectivity)]; alternatively, use
+  -WheelDir to point at an offline wheel directory for an air-gapped install.
+  This tool is conservative defensive monitoring: it only reads/hashes/compares, and never
+  modifies/bypasses/tampers with any billing software.
 
 .PARAMETER SourceDir
-  02-integrity-monitor 源码目录。默认取 lab.psd1 的 Repo.IntegrityMonitor;
-  在 VM 内通常先把该文件夹用 Copy-VMFile/ISO 拷进来,再用 -SourceDir 指向它。
+  The 02-integrity-monitor source directory. Defaults to Repo.IntegrityMonitor from lab.psd1;
+  inside the VM you typically copy that folder in first via Copy-VMFile/ISO, then point -SourceDir
+  at it.
 .PARAMETER BillingPath
-  要建立基线/扫描的 billing 风格路径,默认 C:\CafeBilling。
+  The billing-style path to baseline/scan. Defaults to C:\CafeBilling.
 .PARAMETER WorkDir
-  venv、基线、密钥的工作目录,默认 C:\CafeSec\integrity。
+  The working directory for the venv, baseline, and key. Defaults to C:\CafeSec\integrity.
 .PARAMETER WheelDir
-  (可选)离线 wheel 目录;给了则用 --no-index --find-links 断网安装。
+  (Optional) An offline wheel directory; when provided, installs air-gapped using
+  --no-index --find-links.
 .PARAMETER InstallOnly
-  只安装,不建基线/扫描。
+  Install only; do not build a baseline or scan.
 .EXAMPLE
   .\Deploy-IntegrityMonitor.ps1 -SourceDir C:\CafeSec\02-integrity-monitor -BillingPath C:\CafeBilling
 .NOTES
-  建议管理员运行(读取受保护路径/事件日志)。Python 3.10+ 需已安装(见 docs\downloads.md)。
+  Running as administrator is recommended (to read protected paths/event logs). Python 3.10+ must
+  already be installed (see docs\downloads.md).
 #>
 [CmdletBinding()]
 param(
@@ -47,68 +55,68 @@ if (-not $SourceDir) {
     $SourceDir = if ($rp) { $rp.ProviderPath } else { $cand }
 }
 
-Write-Step "部署完整性监控 (02-integrity-monitor)"
+Write-Step "Deploying integrity monitor (02-integrity-monitor)"
 if (-not (Test-Path (Join-Path $SourceDir 'pyproject.toml'))) {
-    Write-Fail "在 $SourceDir 未找到 pyproject.toml。请把 02-integrity-monitor 文件夹拷进本机并用 -SourceDir 指向它。"
+    Write-Fail "pyproject.toml not found in $SourceDir. Please copy the 02-integrity-monitor folder onto this machine and point -SourceDir at it."
     return
 }
 $py = Get-Command python -ErrorAction SilentlyContinue
-if (-not $py) { Write-Fail "未找到 python。请先安装 Python 3.10+(见 docs\downloads.md)。"; return }
+if (-not $py) { Write-Fail "python not found. Please install Python 3.10+ first (see docs\downloads.md)."; return }
 
 # 1) venv
 if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
 $venv = Join-Path $WorkDir '.venv'
 $venvPy = Join-Path $venv 'Scripts\python.exe'
 if (-not (Test-Path $venvPy)) {
-    Write-Host "创建 venv: $venv" -ForegroundColor Cyan
+    Write-Host "Creating venv: $venv" -ForegroundColor Cyan
     & python -m venv $venv
 }
-if (-not (Test-Path $venvPy)) { Write-Fail "venv 创建失败。"; return }
+if (-not (Test-Path $venvPy)) { Write-Fail "Failed to create venv."; return }
 
-# 2) 安装(联网 或 离线 wheelhouse)
-Write-Host "安装 cafesec-integrity-monitor(可编辑 + windows 额外依赖)..." -ForegroundColor Cyan
+# 2) Install (online or offline wheelhouse)
+Write-Host "Installing cafesec-integrity-monitor (editable + windows extras)..." -ForegroundColor Cyan
 & $venvPy -m pip install --upgrade pip | Out-Null
 if ($WheelDir) {
-    if (-not (Test-Path $WheelDir)) { Write-Fail "WheelDir 不存在: $WheelDir"; return }
+    if (-not (Test-Path $WheelDir)) { Write-Fail "WheelDir does not exist: $WheelDir"; return }
     & $venvPy -m pip install --no-index --find-links $WheelDir -e "$SourceDir[windows]"
 } else {
     & $venvPy -m pip install -e "$SourceDir[windows]"
 }
 if ($LASTEXITCODE -ne 0) {
-    Write-Warn2 "带 [windows] 额外依赖安装失败,回退为仅核心依赖(事件日志解析功能可能受限)。"
+    Write-Warn2 "Install with the [windows] extras failed; falling back to core dependencies only (event log parsing may be limited)."
     & $venvPy -m pip install -e $SourceDir
-    if ($LASTEXITCODE -ne 0) { Write-Fail "安装失败。若处于断网阶段,请用 -WheelDir 指定离线 wheel 目录。"; return }
+    if ($LASTEXITCODE -ne 0) { Write-Fail "Install failed. If you are in the air-gapped phase, use -WheelDir to specify an offline wheel directory."; return }
 }
-# 验证入口可用
+# Verify the entry point works
 & $venvPy -m integrity_monitor --help *> $null
-if ($LASTEXITCODE -ne 0) { Write-Warn2 "`python -m integrity_monitor` 自检返回非零,请检查安装。" }
-else { Write-Ok "完整性监控已安装,入口可用(python -m integrity_monitor)。" }
+if ($LASTEXITCODE -ne 0) { Write-Warn2 "`python -m integrity_monitor` self-check returned non-zero; please check the installation." }
+else { Write-Ok "Integrity monitor installed; entry point available (python -m integrity_monitor)." }
 
-if ($InstallOnly) { Write-Step "仅安装完成。"; return }
+if ($InstallOnly) { Write-Step "Install-only complete."; return }
 
-# 3) 基线 + 扫描
+# 3) Baseline + scan
 if (-not (Test-Path $BillingPath)) {
-    Write-Warn2 "billing 路径不存在: $BillingPath。先创建一个用于演示(放几个示例文件),或用 -BillingPath 指向真实路径。"
+    Write-Warn2 "Billing path does not exist: $BillingPath. Creating one for the demo (with a few sample files), or use -BillingPath to point at a real path."
     New-Item -ItemType Directory -Path $BillingPath -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $BillingPath 'billing-agent.cfg') -Value 'demo=true' -Encoding ASCII
 }
 $store = Join-Path $WorkDir 'baseline.json'
 $hmac  = Join-Path $WorkDir 'hmac.key'
 if (-not (Test-Path $hmac)) {
-    # 生成 32 字节随机 HMAC 密钥(密钥与基线不要放同一可写目录 —— 此处演示,生产请分离)
+    # Generate a 32-byte random HMAC key (keep the key and baseline out of the same writable directory -- this is for the demo; in production, separate them)
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     [System.IO.File]::WriteAllBytes($hmac, $bytes)
-    Write-Ok "已生成 HMAC 密钥: $hmac(生产环境请放到收银用户不可写的位置)。"
+    Write-Ok "HMAC key generated: $hmac (in production, place it where the point-of-sale user cannot write)."
 }
 
-Write-Step "建立基线: $BillingPath"
+Write-Step "Establishing baseline: $BillingPath"
 & $venvPy -m integrity_monitor baseline create --path $BillingPath --store $store --hmac-key-file $hmac
-Write-Step "对照扫描"
+Write-Step "Comparison scan"
 & $venvPy -m integrity_monitor scan --path $BillingPath --store $store --hmac-key-file $hmac
-Write-Step "校验基线签名"
+Write-Step "Verifying baseline signature"
 & $venvPy -m integrity_monitor verify --store $store --hmac-key-file $hmac
 
-Write-Step "完成"
-Write-Host "在靶场里改动一个 billing 文件后再 scan,即可看到 drift 检出(完整性监控在真实遥测上的验证)。" -ForegroundColor Gray
-Write-Host "进程/事件日志异常检查会消费本机真实 Sysmon/Security 日志(见 02-integrity-monitor\docs)。" -ForegroundColor Gray
+Write-Step "Done"
+Write-Host "Modify a billing file in the range and scan again to see drift detection (validating the integrity monitor against real telemetry)." -ForegroundColor Gray
+Write-Host "The process/event-log anomaly checks consume this machine's real Sysmon/Security logs (see 02-integrity-monitor\docs)." -ForegroundColor Gray

@@ -1,37 +1,38 @@
 # 99-cafesec-netplan.yaml
-# 【CSL-Wazuh (Ubuntu Server 24.04 LTS, 10.10.10.10) 隔离网静态地址】
+# [CSL-Wazuh (Ubuntu Server 24.04 LTS, 10.10.10.10) isolated-network static address]
 # ------------------------------------------------------------------
-# 放到客户机内:  /etc/netplan/99-cafesec-netplan.yaml
-# 应用:          sudo netplan apply        (先 `sudo netplan try` 验证不会断你的会话)
+# Place on the client machine at:  /etc/netplan/99-cafesec-netplan.yaml
+# Apply with:                      sudo netplan apply        (run `sudo netplan try` first to verify it won't drop your session)
 #
-# 设计说明(纯防御 / 完全隔离):
-#   - 静态 10.10.10.10/24,与 config\lab.psd1 的 CSL-Wazuh.IP 一致。
-#   - 【刻意】不配 gateway / routes(无默认网关)—— 三层出不去,多一道隔离保险。
-#   - 【刻意】不配 nameservers(隔离网无 DNS)。VM 间若要用主机名,写 /etc/hosts。
-#   - 这是"两阶段搭建"的阶段二配置:阶段一临时联网装完 Wazuh/补丁后,把网卡切回
-#     CafeSec-Isolated (Private) 交换机,套用本文件,再跑隔离验证脚本确认合规。
+# Design notes (purely defensive / fully isolated):
+#   - Static 10.10.10.10/24, matching CSL-Wazuh.IP in config\lab.psd1.
+#   - [Intentionally] no gateway / routes (no default gateway) -- nothing leaves at layer 3, an extra layer of isolation insurance.
+#   - [Intentionally] no nameservers (the isolated network has no DNS). If VMs need hostnames, put them in /etc/hosts.
+#   - This is the phase-two configuration of the "two-phase build": after phase one temporarily connects to the network
+#     to install Wazuh/patches, switch the NIC back to the CafeSec-Isolated (Private) switch, apply this file, then run the
+#     isolation validation script to confirm compliance.
 #
-# !!! 重要:网卡名必须先确认 !!!
-#   现代 Ubuntu 用可预测网卡名(ens* / enp*),不再是 eth0。先查实际名字:
-#       ip link            # 或:  ip -br link
-#   常见示例:Hyper-V Gen2 VM 多为 eth0 或 enp0s* / ens*;以 `ip link` 输出为准。
-#   把下面的 ens3 改成你机器上真实的网卡名,否则配置不会生效。
+# !!! IMPORTANT: confirm the NIC name first !!!
+#   Modern Ubuntu uses predictable interface names (ens* / enp*), no longer eth0. Check the actual name first:
+#       ip link            # or:  ip -br link
+#   Common examples: Hyper-V Gen2 VMs are often eth0 or enp0s* / ens*; trust the `ip link` output.
+#   Change the ens3 below to the real NIC name on your machine, otherwise the configuration will not take effect.
 #
-# netplan 注意:YAML 用空格缩进(禁用 Tab);本机渲染器通常是 systemd-networkd。
+# netplan note: YAML uses space indentation (no Tabs); the renderer on this host is usually systemd-networkd.
 network:
   version: 2
   renderer: networkd
   ethernets:
-    ens3:                          # <-- 改成 `ip link` 查到的真实网卡名 (ens*/enp*/eth0)
-      dhcp4: false                 # 隔离网无 DHCP,用静态地址
+    ens3:                          # <-- change to the real NIC name found via `ip link` (ens*/enp*/eth0)
+      dhcp4: false                 # the isolated network has no DHCP, use a static address
       dhcp6: false
-      accept-ra: false             # 不接受 IPv6 路由通告(避免意外取得默认路由)
-      link-local: []               # 不要 IPv4/IPv6 link-local 地址,保持网络面最小
+      accept-ra: false             # do not accept IPv6 router advertisements (avoids accidentally acquiring a default route)
+      link-local: []               # no IPv4/IPv6 link-local addresses, keep the network surface minimal
       addresses:
-        - 10.10.10.10/24           # 本机隔离网地址(= lab.psd1 CSL-Wazuh.IP)
+        - 10.10.10.10/24           # this host's isolated-network address (= lab.psd1 CSL-Wazuh.IP)
       # ----------------------------------------------------------------
-      # 下面这些【刻意全部省略】—— 这是隔离的一部分,请勿取消注释:
-      #   routes:        (无默认网关 default route)
-      #   gateway4:      (已废弃写法;同样不配)
-      #   nameservers:   (隔离网无 DNS)
+      # The following are [all intentionally omitted] -- this is part of the isolation, do not uncomment:
+      #   routes:        (no default route)
+      #   gateway4:      (deprecated syntax; likewise not configured)
+      #   nameservers:   (the isolated network has no DNS)
       # ----------------------------------------------------------------

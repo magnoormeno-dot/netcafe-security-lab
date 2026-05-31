@@ -85,5 +85,5 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "--cov=integrity_monitor --cov-report=term-missing --cov-report=xml"
+addopts = "--cov=integrity_monitor --cov-report=term-missing --cov-report=xml --cov-fail-under=85"
 testpaths = ["tests"]

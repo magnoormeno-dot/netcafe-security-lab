@@ -18,7 +18,7 @@ The maintainer background is intentionally described at a project level. The wor
 
 ## Verification
 
-The CafeSec Lab maintainer has completed OpenAI trusted access identity verification for authorized security work. This provides an external trust signal for legitimate defensive research workflows while the project continues to welcome additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities.
+The CafeSec Lab maintainer has completed OpenAI trusted-access identity verification for authorized security work. This is offered as one external trust signal — it is **not** an endorsement by OpenAI or any other provider, and it does not transfer to another provider's access decision. The project welcomes additional verification dialogue with AI providers, vulnerability coordination platforms, and security communities. CafeSec Lab is a single-maintainer, best-effort project (no SLA).
 
 ## Responsible Boundaries
 

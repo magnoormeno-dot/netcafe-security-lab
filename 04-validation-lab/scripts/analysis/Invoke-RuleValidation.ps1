@@ -1,34 +1,39 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  接缝①:直接校验主仓 01-hardening-checklist/detection 下的【真实】Sigma / YARA 规则,产出报告。
+  Seam #1: validate the REAL Sigma / YARA rules under 01-hardening-checklist/detection and write a report.
 .DESCRIPTION
-  这是验证靶场与检测规则之间的接缝。它不复制规则,而是从仓库的 detection 目录就地读取:
-    * Sigma:用 sigma-cli 的 opensearch 后端做 `sigma convert` —— 能转换 = 规则语法/字段可用。
-    * YARA :用 yara64.exe 编译每条规则(对空临时文件扫描,退出码 0 = 可编译);可选对 -Target 实扫。
-  产出 reports\rule-validation-<时间>.md 与 .jsonl。
+  This is the seam between the validation lab and the detection rules. It does not copy the rules; it
+  reads them in place from the repo's detection directories:
+    * Sigma: `sigma convert` with the opensearch backend's `lucene` target (the Wazuh indexer is
+      OpenSearch, so Lucene queries are directly usable). A clean convert proves the rule's
+      syntax/fields/logsource are valid.
+    * YARA : compile each rule with yara64.exe (a no-match scan of an empty temp file exits 0 = compiles);
+      with -Target it additionally scans a real path.
+  Writes reports\rule-validation-<timestamp>.md and .jsonl.
 
-  诚实边界:本脚本做的是【离线的规则可转换/可编译校验】(catch 语法/字段错误)。
-  "规则在真实遥测上是否命中"需要在【运行中的靶场】里做:部署 Sysmon/WEF/Wazuh 后,
-  由你本人在隔离环境内手动触发良性动作(如停一个测试服务),再到 Wazuh/ForwardedEvents 里确认命中。
-  本脚本不执行任何攻击/触发动作。
+  Honesty boundary: this performs OFFLINE rule convert/compile validation (it catches field/syntax errors).
+  Whether a rule actually FIRES on real telemetry must be validated in a RUNNING lab: deploy Sysmon/WEF/
+  Wazuh, then manually trigger a benign action (e.g. stop a test service) and confirm the hit in
+  Wazuh/ForwardedEvents. This script performs no attack/trigger action.
 
-.PARAMETER SigmaDir
-  Sigma 规则目录。默认取 lab.psd1 的 Repo.DetectionSigma(相对本模块根解析到 ../01-.../detection/sigma)。
-.PARAMETER YaraDir
-  YARA 规则目录。默认取 lab.psd1 的 Repo.DetectionYara。
-.PARAMETER Target
-  (可选)用 YARA 规则实扫的目录/文件;不给则只做编译校验。
-.PARAMETER YaraExe
-  yara64.exe 路径,默认 downloads\tools\yara64.exe(见 Setup-RuleEngines.ps1)。
-.PARAMETER Pipeline
-  sigma convert 用的处理管线,默认 ecs_windows(贴合 Sysmon/Windows 字段)。
+  Exit code: 0 only when at least one rule was processed and all processed rules passed; otherwise the
+  number of failures (or 1 if no rule engine was available, so an empty run cannot masquerade as clean).
+  This makes the offline subset CI-enforceable.
+
+.PARAMETER SigmaDir   Sigma rules directory. Default: lab.psd1 Repo.DetectionSigma (../01-.../detection/sigma).
+.PARAMETER YaraDir    YARA rules directory. Default: lab.psd1 Repo.DetectionYara.
+.PARAMETER Target     (optional) Path to additionally scan with YARA; omit for compile-only.
+.PARAMETER YaraExe    Path to yara64.exe. Default: downloads\tools\yara64.exe (see Setup-RuleEngines.ps1).
+.PARAMETER Pipeline   sigma processing pipeline. Default ecs_windows (matches Sysmon/Windows fields).
+.PARAMETER SigmaTarget sigma conversion target. Default 'lucene' (opensearch backend; OpenSearch/Wazuh).
 .EXAMPLE
-  .\Invoke-RuleValidation.ps1                       # 校验仓库全部 Sigma/YARA 规则
+  .\Invoke-RuleValidation.ps1                    # validate all repo Sigma/YARA rules
 .EXAMPLE
-  .\Invoke-RuleValidation.ps1 -Target C:\Samples    # 额外用 YARA 实扫一个目录
+  .\Invoke-RuleValidation.ps1 -Target C:\Samples # also YARA-scan a directory
 .NOTES
-  无需管理员。需 sigma-cli(opensearch 后端)与 yara64.exe —— 由 Setup-RuleEngines.ps1 在临时联网阶段装好。
+  No admin required. Needs sigma-cli (opensearch backend + pysigma-pipeline-windows) and yara64.exe,
+  installed by Setup-RuleEngines.ps1 during the temporary-connectivity phase.
 #>
 [CmdletBinding()]
 param(
@@ -36,9 +41,10 @@ param(
     [string]$YaraDir,
     [string]$Target,
     [string]$YaraExe,
-    [string]$Pipeline = 'ecs_windows'
+    [string]$Pipeline = 'ecs_windows',
+    [string]$SigmaTarget = 'lucene'
 )
-$ErrorActionPreference = 'Continue'   # 规则转换/编译失败是数据,不应终止脚本
+$ErrorActionPreference = 'Continue'   # a rule failing convert/compile is data, not a script error
 . "$PSScriptRoot\..\lib\Common.ps1"
 
 $moduleRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 04-validation-lab\
@@ -55,57 +61,62 @@ if (-not $SigmaDir) { $SigmaDir = Resolve-RepoPath $cfg.Repo.DetectionSigma }
 if (-not $YaraDir)  { $YaraDir  = Resolve-RepoPath $cfg.Repo.DetectionYara }
 if (-not $YaraExe)  { $YaraExe  = Join-Path $moduleRoot 'downloads\tools\yara64.exe' }
 
-Write-Step "规则校验(消费主仓 01-hardening-checklist/detection)"
-Write-Host "  Sigma 目录: $SigmaDir" -ForegroundColor Gray
-Write-Host "  YARA  目录: $YaraDir"  -ForegroundColor Gray
+Write-Step "Rule validation (consuming 01-hardening-checklist/detection)"
+Write-Host "  Sigma dir: $SigmaDir" -ForegroundColor Gray
+Write-Host "  YARA  dir: $YaraDir"  -ForegroundColor Gray
 
 $results = @()
+$enginesAvailable = $false
 
 # ---------- Sigma ----------
-Write-Step "Sigma → opensearch 转换校验"
+Write-Step "Sigma -> $SigmaTarget convert validation (pipeline: $Pipeline)"
 $sigmaCmd = Get-Command sigma -ErrorAction SilentlyContinue
 if (-not $sigmaCmd) {
-    Write-Warn2 "未找到 sigma(先在临时联网阶段跑 analysis\Setup-RuleEngines.ps1)。跳过 Sigma 校验。"
+    Write-Warn2 "sigma not found (run analysis\Setup-RuleEngines.ps1 during the connectivity phase). Skipping Sigma."
 } elseif (-not (Test-Path $SigmaDir)) {
-    Write-Warn2 "Sigma 目录不存在: $SigmaDir。跳过。"
+    Write-Warn2 "Sigma dir not found: $SigmaDir. Skipping."
 } else {
+    $enginesAvailable = $true
     $sigmaFiles = Get-ChildItem -Path $SigmaDir -Recurse -Filter *.yml -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -notlike '*example*' }   # 跳过 *.example.yml 调优样例
+        Where-Object { $_.Name -notlike '*example*' }   # skip *.example.yml tuning samples
     foreach ($f in $sigmaFiles) {
         $global:LASTEXITCODE = 0
-        $out = & $sigmaCmd convert -t opensearch -p $Pipeline $f.FullName 2>&1
-        $ok = ($? -and $LASTEXITCODE -eq 0)
+        # sigma writes "Parsing Sigma rules" to stderr; under PS 5.1 that flips $? to $false
+        # (NativeCommandError), so gate on the exit code only (command existence is already ensured).
+        $out = & $sigmaCmd convert -t $SigmaTarget -p $Pipeline $f.FullName 2>&1
+        $ok = ($LASTEXITCODE -eq 0)
         $msg = if ($ok) { 'converted' } else { (($out | Out-String).Trim() -split "`n" | Select-Object -First 2) -join ' ' }
-        $results += [pscustomobject]@{ kind='sigma'; rule=$f.Name; ok=$ok; detail=$msg }
-        Write-Host ("  {0} {1}" -f $(if($ok){'[ OK ]'}else{'[FAIL]'}), $f.Name) -ForegroundColor $(if($ok){'Green'}else{'Red'})
+        $results += [pscustomobject]@{ kind = 'sigma'; rule = $f.Name; ok = $ok; detail = $msg }
+        Write-Host ("  {0} {1}" -f $(if ($ok) { '[ OK ]' } else { '[FAIL]' }), $f.Name) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
         if (-not $ok) { Write-Host ("        $msg") -ForegroundColor DarkYellow }
     }
 }
 
 # ---------- YARA ----------
-$yaraHeader = 'YARA 编译校验'
-if ($Target) { $yaraHeader += " + 实扫 $Target" }
+$yaraHeader = 'YARA compile validation'
+if ($Target) { $yaraHeader += " + scan $Target" }
 Write-Step $yaraHeader
 if (-not (Test-Path $YaraExe)) {
-    Write-Warn2 "未找到 yara64.exe ($YaraExe)。先跑 analysis\Setup-RuleEngines.ps1。跳过 YARA 校验。"
+    Write-Warn2 "yara64.exe not found ($YaraExe). Run analysis\Setup-RuleEngines.ps1. Skipping YARA."
 } elseif (-not (Test-Path $YaraDir)) {
-    Write-Warn2 "YARA 目录不存在: $YaraDir。跳过。"
+    Write-Warn2 "YARA dir not found: $YaraDir. Skipping."
 } else {
-    # 编译校验用的空临时文件(yara 需要一个扫描目标)
+    $enginesAvailable = $true
+    # empty temp file as a compile-check target (yara needs a scan target)
     $tmp = Join-Path $env:TEMP ("cafesec_yara_probe_{0}.bin" -f $PID)
     Set-Content -LiteralPath $tmp -Value 'cafesec-rule-compile-probe' -Encoding ASCII
     try {
-        $yaraFiles = Get-ChildItem -Path $YaraDir -Recurse -Include *.yar,*.yara -ErrorAction SilentlyContinue
+        $yaraFiles = Get-ChildItem -Path $YaraDir -Recurse -Include *.yar, *.yara -ErrorAction SilentlyContinue
         foreach ($r in $yaraFiles) {
             $scanPath = if ($Target) { $Target } else { $tmp }
             $global:LASTEXITCODE = 0
             $out = & $YaraExe -w $r.FullName $scanPath 2>&1
-            # yara: 0 = 成功(命中或未命中均 0);非 0 = 编译/运行错误
+            # yara: 0 = success (match or no match); non-zero = compile/run error
             $ok = ($LASTEXITCODE -eq 0)
             $hits = if ($ok -and $Target) { @($out | Where-Object { $_ -and $_ -notmatch '^yara' }).Count } else { 0 }
             $msg = if ($ok) { if ($Target) { "compiled; matches=$hits" } else { 'compiled' } } else { (($out | Out-String).Trim() -split "`n" | Select-Object -First 2) -join ' ' }
-            $results += [pscustomobject]@{ kind='yara'; rule=$r.Name; ok=$ok; detail=$msg }
-            Write-Host ("  {0} {1}  {2}" -f $(if($ok){'[ OK ]'}else{'[FAIL]'}), $r.Name, $(if($ok -and $Target){"(matches=$hits)"}else{''})) -ForegroundColor $(if($ok){'Green'}else{'Red'})
+            $results += [pscustomobject]@{ kind = 'yara'; rule = $r.Name; ok = $ok; detail = $msg }
+            Write-Host ("  {0} {1}  {2}" -f $(if ($ok) { '[ OK ]' } else { '[FAIL]' }), $r.Name, $(if ($ok -and $Target) { "(matches=$hits)" } else { '' })) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
             if (-not $ok) { Write-Host ("        $msg") -ForegroundColor DarkYellow }
         }
     } finally {
@@ -113,12 +124,12 @@ if (-not (Test-Path $YaraExe)) {
     }
 }
 
-# ---------- 报告 ----------
+# ---------- report ----------
 $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
 $reportDir = Join-Path $moduleRoot 'reports'
 if (-not (Test-Path $reportDir)) { New-Item -ItemType Directory -Path $reportDir -Force | Out-Null }
-$mdPath  = Join-Path $reportDir "rule-validation-$stamp.md"
-$jsonl   = Join-Path $reportDir "rule-validation-$stamp.jsonl"
+$mdPath = Join-Path $reportDir "rule-validation-$stamp.md"
+$jsonl  = Join-Path $reportDir "rule-validation-$stamp.jsonl"
 
 $pass = @($results | Where-Object ok).Count
 $fail = @($results | Where-Object { -not $_.ok }).Count
@@ -126,19 +137,31 @@ $fail = @($results | Where-Object { -not $_.ok }).Count
 $md = @()
 $md += "# Rule validation report ($stamp)"
 $md += ""
-$md += "> 合成实验室证据(规则可转换/可编译校验)。非现场验证;引用前须人工复核。"
+$md += "> Reproducible synthetic lab evidence (offline rule convert/compile check). Not field validation; human-review before citing."
 $md += ""
-$md += "Source rules: ``01-hardening-checklist/detection`` | Pipeline: ``$Pipeline`` | Pass: **$pass** Fail: **$fail**"
+$md += "Source rules: ``01-hardening-checklist/detection`` | Sigma target: ``$SigmaTarget`` | Pipeline: ``$Pipeline`` | Pass: **$pass** Fail: **$fail**"
 $md += ""
 $md += "| Kind | Rule | Result | Detail |"
 $md += "| --- | --- | --- | --- |"
 foreach ($r in $results) {
-    $md += ("| {0} | {1} | {2} | {3} |" -f $r.kind, $r.rule, $(if($r.ok){'✅'}else{'❌'}), ($r.detail -replace '\|','\\|'))
+    $md += ("| {0} | {1} | {2} | {3} |" -f $r.kind, $r.rule, $(if ($r.ok) { 'PASS' } else { 'FAIL' }), ($r.detail -replace '\|', '\\|'))
 }
 Set-Content -LiteralPath $mdPath -Value ($md -join "`r`n") -Encoding UTF8
 $results | ForEach-Object { $_ | ConvertTo-Json -Compress } | Set-Content -LiteralPath $jsonl -Encoding UTF8
 
-Write-Step "完成: Pass=$pass Fail=$fail"
-Write-Host "  报告: $mdPath" -ForegroundColor Gray
-Write-Host "  数据: $jsonl"  -ForegroundColor Gray
-Write-Host "  下一步:在运行中的靶场里部署 Sysmon/WEF/Wazuh 后,手动触发良性动作以做【实弹】命中验证(见 COVERAGE.md)。" -ForegroundColor Gray
+Write-Step "Done: Pass=$pass Fail=$fail"
+Write-Host "  report: $mdPath" -ForegroundColor Gray
+Write-Host "  data:   $jsonl"  -ForegroundColor Gray
+
+# ---------- honest exit code (CI-enforceable) ----------
+if (-not $enginesAvailable -or $results.Count -eq 0) {
+    Write-Fail "No rule engine was available, so NOTHING was validated. Install sigma-cli + yara64.exe (Setup-RuleEngines.ps1) and re-run."
+    exit 1
+}
+if ($fail -gt 0) {
+    Write-Fail "$fail rule(s) failed to convert/compile. See the report."
+} else {
+    Write-Ok "All $pass rule(s) converted/compiled cleanly."
+    Write-Host "  Next: in a running lab, deploy Sysmon/WEF/Wazuh and manually trigger benign actions for live-fire validation (see COVERAGE.md)." -ForegroundColor Gray
+}
+exit $fail
