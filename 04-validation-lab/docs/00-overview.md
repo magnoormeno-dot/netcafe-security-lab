@@ -58,3 +58,4 @@
 - `03-domain-and-wef.md` — 域(cafesec.lab)+ WEF + GPO + 审核策略
 - `downloads.md` — 全部官方下载地址 + 文件注入方法
 - `04-defensive-validation-runbook.md` — **防御验证 runbook(测试用例 + 证据 + CVP 措辞 + reviewer gate;搭好后看这个)**
+- `05-unattended-provisioning.md` — 无人值守装机(Windows autounattend / Ubuntu cloud-init 模板 + 已测的 ISO 构建器)

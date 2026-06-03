@@ -22,6 +22,10 @@ never tested" toward "tested, automated, and producing real evidence."
   reset allowlist + switch-removal guard, artifact checksum, and version-manifest loader.
 - **Reproducibility**: `config/versions.psd1` pinned-version + checksum manifest, and drive-root
   override / auto-relocation (`CAFESEC_VMROOT` / `CAFESEC_ISOROOT`) so the lab no longer hard-codes `E:`.
+- **Unattended provisioning** (`config/unattend/`, `scripts/New-UnattendIso.ps1`,
+  `docs/05-unattended-provisioning.md`): Windows autounattend + Ubuntu cloud-init templates and a
+  Pester-tested seed-ISO builder (reuses the IMAPI2 `New-PayloadIso` core) to automate Phase-1 OS
+  install instead of manual clicking.
 - **CI expansion** (`Validation Lab CI`): Pester job, ShellCheck job, and an offline rule-validation
   job (Sigma convert + YARA compile) that gates on any rule failure and regenerates the CVP evidence;
   plus a weekly scheduled health sweep to catch toolchain drift.
