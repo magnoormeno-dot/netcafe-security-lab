@@ -10,6 +10,7 @@ The rules are intentionally generic. They are designed to identify behavioral pa
 | --- | --- |
 | `yara/` | File and memory-oriented YARA rules for generic suspicious binary traits. |
 | `sigma/` | Windows event-log Sigma rules for service tampering, registry changes, and billing process disruption. |
+| `validation-scenarios.md` | Non-operational lab scenario cards for validating detection telemetry and tuning workflow. |
 | `tuning-guide.md` | False-positive handling, tuning governance, and review workflow. |
 | `tuning-register.example.csv` | Minimum register fields for local tuning decisions. |
 
