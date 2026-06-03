@@ -42,9 +42,9 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     if ($ok) {
         Write-Host "[ OK ] sigma-cli + opensearch 后端已安装。示例转换:" -ForegroundColor Green
         Write-Host "  # 生成 Lucene 查询(可在 Wazuh Dashboard / OpenSearch 使用):" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "  sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check $rulesSigma\your_rule.yml" -ForegroundColor Gray
         Write-Host "  # 生成 OpenSearch 告警监控规则 JSON:" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -f monitor_rule -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "  sigma convert -t opensearch_lucene -f monitor_rule -p ecs_windows --disable-pipeline-check $rulesSigma\your_rule.yml" -ForegroundColor Gray
     } else {
         Write-Host "[WARN] sigma opensearch 后端安装未成功(可能正处于断网阶段或 sigma 不在 PATH)。请在临时联网阶段重试: sigma plugin install opensearch" -ForegroundColor Yellow
     }
@@ -65,7 +65,7 @@ if ($YaraZip -and (Test-Path $YaraZip)) {
 }
 
 # 目录占位说明
-Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "把你的 Sigma 规则(.yml)放在此目录。用 sigma convert -t opensearch -p ecs_windows <rule>.yml 转换(详见 Setup-RuleEngines.ps1 输出与 README.md)。" -Encoding UTF8
+Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "把你的 Sigma 规则(.yml)放在此目录。用 sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check <rule>.yml 转换(详见 Setup-RuleEngines.ps1 输出与 README.md)。" -Encoding UTF8
 Set-Content -Path (Join-Path $rulesYara  'README.txt') -Value "把你的 YARA 规则(.yar/.yara)放在此目录。用 scripts\analysis\Invoke-YaraScan.ps1 扫描。" -Encoding UTF8
 
 Write-Host "`n目录就绪:" -ForegroundColor Gray

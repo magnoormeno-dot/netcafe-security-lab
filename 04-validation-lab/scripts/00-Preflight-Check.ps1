@@ -18,8 +18,8 @@ Write-Step "CafeSec Lab 预检 (Preflight Check)"
 $os = Get-CimInstance Win32_OperatingSystem
 $edition = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
 Write-Host "OS          : $($os.Caption) [$edition] (Build $($os.BuildNumber), $($os.OSArchitecture))"
-if ($edition -and $edition -notmatch '^Core') { Write-Ok "Windows 版本支持 Hyper-V (EditionID=$edition)" }
-elseif ($edition -match '^Core') { Write-Fail "Home 版($edition)不含 Hyper-V。需要 Pro/Enterprise/Education/Server。" }
+if ($edition -and -not (Test-IsHomeEdition -EditionId $edition)) { Write-Ok "Windows 版本支持 Hyper-V (EditionID=$edition)" }
+elseif (Test-IsHomeEdition -EditionId $edition) { Write-Fail "Home 版($edition)不含 Hyper-V。需要 Pro/Enterprise/Education/Server。" }
 else { Write-Warn2 "无法读取 EditionID,跳过版本判定(Caption: $($os.Caption))。" }
 
 # 2. 内存

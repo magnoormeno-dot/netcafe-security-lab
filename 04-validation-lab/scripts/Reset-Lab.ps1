@@ -246,8 +246,18 @@ foreach ($dir in $targetDirs) {
 # --- 5e. 删除隔离交换机(且仅删这一个)---
 Write-Step "删除隔离交换机"
 if ($targetSwitch) {
-    Remove-VMSwitch -Name $targetSwitch.Name -Force -ErrorAction Stop
-    Write-Ok "  已删除交换机 '$($targetSwitch.Name)'。"
+    # 安全护栏:只允许删配置里的隔离交换机(LabLogic\Test-LabSwitchRemovable,已单测);
+    # 并与删 VM/VHDX 一致地用 try/catch,避免尾部未捕获异常留下半拆状态。
+    if (Test-LabSwitchRemovable -SwitchName $targetSwitch.Name -IsolatedSwitchName $isolatedSwitch) {
+        try {
+            Remove-VMSwitch -Name $targetSwitch.Name -Force -ErrorAction Stop
+            Write-Ok "  已删除交换机 '$($targetSwitch.Name)'。"
+        } catch {
+            Write-Fail "  无法删除交换机 '$($targetSwitch.Name)': $($_.Exception.Message)"
+        }
+    } else {
+        Write-Fail "  安全护栏拦截:'$($targetSwitch.Name)' 不是隔离交换机 '$isolatedSwitch',拒绝删除。"
+    }
 } else {
     Write-Host "  (无隔离交换机可删)" -ForegroundColor Gray
 }

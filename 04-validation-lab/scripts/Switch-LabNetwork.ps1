@@ -57,12 +57,9 @@ $cfg = Get-LabConfig
 
 $isolatedSwitch = $cfg.Network.SwitchName   # 'CafeSec-Isolated'
 
-# ---- 解析本阶段的目标交换机 ----
-if ($Phase -eq 'Isolated') {
-    $targetSwitch = $isolatedSwitch
-} else {
-    $targetSwitch = $ProvisioningSwitch
-}
+# ---- 解析本阶段的目标交换机(逻辑抽进 LabLogic\Resolve-PhaseSwitch,见 tests)----
+$phaseInfo    = Resolve-PhaseSwitch -Phase $Phase -IsolatedSwitch $isolatedSwitch -ProvisioningSwitch $ProvisioningSwitch
+$targetSwitch = $phaseInfo.TargetSwitch
 
 Write-Step "阶段切换: -Phase $Phase  ->  目标交换机 '$targetSwitch'"
 
@@ -106,7 +103,7 @@ if ($Phase -eq 'Provisioning' -and $sw.SwitchType -eq 'External') {
 }
 
 # 防呆:阶段一若有人把隔离交换机本身当临时交换机传进来,直接拦下。
-if ($Phase -eq 'Provisioning' -and $targetSwitch -eq $isolatedSwitch) {
+if ($phaseInfo.ProvisioningEqualsIsolated) {
     Write-Fail "你把隔离交换机 '$isolatedSwitch' 当成临时联网交换机了。隔离交换机无法联网,请指定真正的 NAT/External 交换机。"
     return
 }

@@ -275,6 +275,32 @@ cd 04-validation-lab\scripts\analysis
 
 ---
 
+## 9. 故障排查 (Troubleshooting)
+
+> 把靶场真正跑起来时最易踩的坑(规则相关的几条已在 CI 的 `rule-validation` job 中自动回归)。
+
+**Sigma 转换报 `Invalid value for '--target'` 或 `Usage: sigma convert`**
+- 当前 pySigma OpenSearch 后端的 target 名是 `opensearch_lucene`(旧的 `opensearch` 已移除),且 `ecs_windows` pipeline 需要 `--disable-pipeline-check`。正确调用:`sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check <rule>.yml`。`Invoke-RuleValidation.ps1` 已按此修正。
+- sigma-cli 把进度("Parsing Sigma rules")写到 **stderr**,所以判定成败只看**退出码**,不要看 `$?`(它会被 stderr 写入翻成 `$false`)。
+
+**YARA 编译被跳过 / 找不到 `yara64.exe`**
+- 把官方 `yara-<ver>-win64.zip` 里的 `yara64.exe` 放到 `downloads\tools\`,或给 `Invoke-RuleValidation.ps1 -YaraExe <路径>` / `Invoke-YaraScan.ps1 -YaraExe <路径>`。
+
+**WEF 订阅一直不 `Active` / 收集器看不到客户机事件**
+- 客户机机器账户要在收集器的 `Event Log Readers` 组里;`winrm quickconfig` 确认 WinRM 在跑;`wecutil gr <SubId>` 看运行态;客户机 `gpupdate /force` 后等一个轮询周期。
+- 源发起型订阅走 Kerberos,**必须在域内**(见 `03-domain-and-wef.md`);工作组下不行。
+
+**4688 进程创建事件没有命令行**
+- 需开「审核进程创建」并启用「在进程创建事件中包含命令行」(GPO),否则 `billing_process_termination.yml` 的 `CommandLine` 字段为空、规则点不亮。`auditpol /get /subcategory:"Process Creation"` 自检。
+
+**注册表 4657 没有事件**
+- 4657 需要在被监控键上配 SACL(对象访问审核)。无 4657 流 = 检测盲点(TC-03),不是「无事」。
+
+**跨主机复现 / 宿主没有 E: 盘**
+- 设环境变量 `CAFESEC_VMROOT` / `CAFESEC_ISOROOT`,或让 `Get-LabConfig` 自动选最大可用固定盘(`lib\LabLogic.psm1\Resolve-LabPathRoot`)。工具/镜像版本与校验和锁定在 `config\versions.psd1`。
+
+---
+
 ## 相关引用
 - [`validation-scenarios.md`](../../01-hardening-checklist/detection/validation-scenarios.md) — Sigma Card 1-3 完整叙述(本 runbook 的 TC-01~03 基础)。
 - [`../COVERAGE.md`](../COVERAGE.md) — 规则/checklist → 靶场遥测/脚本 的覆盖矩阵。

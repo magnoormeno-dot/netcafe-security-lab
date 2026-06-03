@@ -4,6 +4,10 @@
   在脚本顶部用:  . "$PSScriptRoot\lib\Common.ps1"   (或相对路径)载入。
 #>
 
+# Pure, unit-testable decision logic lives in LabLogic.psm1; import it here so every
+# script that dot-sources Common.ps1 gains it. $PSScriptRoot here = ...\scripts\lib.
+Import-Module (Join-Path $PSScriptRoot 'LabLogic.psm1') -Force
+
 function Get-LabConfig {
     [CmdletBinding()]
     param(
@@ -14,7 +18,18 @@ function Get-LabConfig {
     if (-not (Test-Path $ConfigPath)) {
         throw "找不到配置文件 lab.psd1 ($ConfigPath)。请用 -ConfigPath 指定其绝对路径。"
     }
-    return Import-PowerShellDataFile -Path $ConfigPath
+    $cfg = Import-PowerShellDataFile -Path $ConfigPath
+    # Reproducibility/portability: honor env overrides (CAFESEC_VMROOT/CAFESEC_ISOROOT) and
+    # auto-relocate the VM/ISO roots when the configured drive is absent (a host with no E:).
+    # No-op on the author's host (E: present). Never fatal: on any failure we keep the psd1 values.
+    try {
+        $vols = Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
+        $cfg.Paths.VmRoot  = Resolve-LabPathRoot -ConfiguredPath $cfg.Paths.VmRoot  -OverridePath $env:CAFESEC_VMROOT  -Volume $vols -LeafName 'CafeSec-Lab\VMs'
+        $cfg.Paths.IsoRoot = Resolve-LabPathRoot -ConfiguredPath $cfg.Paths.IsoRoot -OverridePath $env:CAFESEC_ISOROOT -Volume $vols -LeafName 'CafeSec-Lab\ISO'
+    } catch {
+        Write-Verbose "Lab path resolution skipped: $($_.Exception.Message)"
+    }
+    return $cfg
 }
 
 function Test-IsAdmin {
