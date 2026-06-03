@@ -31,3 +31,17 @@ Describe 'lab.psd1 via Get-LabConfig' {
         ($script:cfg.VMs.MemoryGB | Measure-Object -Sum).Sum | Should -BeLessOrEqual 32
     }
 }
+
+Describe 'Get-LabConfig path resolution (wired end-to-end)' {
+    It 'honors the CAFESEC_VMROOT / CAFESEC_ISOROOT environment overrides' {
+        $env:CAFESEC_VMROOT = 'Q:\custom-vmroot'
+        $env:CAFESEC_ISOROOT = 'Q:\custom-isoroot'
+        try {
+            $c = Get-LabConfig
+            $c.Paths.VmRoot | Should -Be 'Q:\custom-vmroot'
+            $c.Paths.IsoRoot | Should -Be 'Q:\custom-isoroot'
+        } finally {
+            Remove-Item Env:\CAFESEC_VMROOT, Env:\CAFESEC_ISOROOT -ErrorAction SilentlyContinue
+        }
+    }
+}

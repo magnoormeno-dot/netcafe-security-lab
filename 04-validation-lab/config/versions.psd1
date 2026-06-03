@@ -34,16 +34,19 @@
     }
 
     Yara = @{
-        Version = '4.5.2'                # VirusTotal/yara Windows release (confirm exact on the releases page)
-        Sha256  = ''                     # yara-<ver>-win64.zip hash, filled after official download
-        Source  = 'https://github.com/VirusTotal/yara/releases'
+        Version   = '4.5.5'              # VirusTotal/yara win64 release used for the committed lab evidence
+        Sha256    = ''                   # yara-<ver>-win64.zip hash, filled after official download
+        ExeSha256 = '1C45EB279D820ABA81FD41C22384428EBE44037CF5793BE4B52A9D3B3DF62B33'  # yara64.exe from that zip
+        Source    = 'https://github.com/VirusTotal/yara/releases'
     }
 
     SigmaCli = @{
         # Pin sigma-cli + the opensearch backend so rule conversion is stable.
-        Version          = ''            # e.g. '1.0.4'; pip install "sigma-cli==<Version>"
-        OpenSearchPlugin = ''            # backend plugin version, if pinning
-        Source           = 'https://github.com/SigmaHQ/sigma-cli'
+        Version = '3.0.2'                # pip install "sigma-cli==3.0.2"  (used for the committed lab evidence)
+        Backend = 'opensearch'           # sigma plugin install opensearch
+        # Convert with: sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check <rule>
+        Target  = 'opensearch_lucene'
+        Source  = 'https://github.com/SigmaHQ/sigma-cli'
     }
 
     Python = @{
