@@ -1,5 +1,7 @@
 # 06 — 从零到 live-fire 证据:可复制粘贴的搭建走查 (Build walkthrough)
 
+> English version: [`06-build-walkthrough.en.md`](06-build-walkthrough.en.md).
+
 一条**线性、可断点续跑**的操作路径,把靶场从「未搭建」推到「产出真实 live-fire 证据」。
 每个里程碑标了大致耗时、是否需要管理员/重启,以及**在哪一步把输出贴给协作的 agent**。
 
