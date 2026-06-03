@@ -95,6 +95,10 @@ Describe 'Resolve-LabPathRoot' {
     It 'falls back to the configured path when no volumes are available' {
         Resolve-LabPathRoot -ConfiguredPath 'E:\CafeSec-Lab\VMs' -Volume @() -LeafName 'CafeSec-Lab\VMs' | Should -Be 'E:\CafeSec-Lab\VMs'
     }
+    It 'auto-relocates to the drive root when no LeafName is supplied' {
+        $v = @([pscustomobject]@{ DriveLetter = 'D'; SizeRemaining = 500GB })
+        Resolve-LabPathRoot -ConfiguredPath 'E:\CafeSec-Lab\VMs' -Volume $v | Should -Be 'D:\'
+    }
 }
 
 Describe 'Test-LabSwitchRemovable' {
@@ -156,5 +160,8 @@ Describe 'Get-LabArtifactManifest' {
         } finally {
             Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
         }
+    }
+    It 'loads the repo versions.psd1 from its default path' {
+        (Get-LabArtifactManifest).SigmaCli.Version | Should -Be '3.0.2'
     }
 }

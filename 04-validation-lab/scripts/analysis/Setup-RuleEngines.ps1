@@ -14,6 +14,7 @@
 [CmdletBinding()]
 param([string]$YaraZip)
 $ErrorActionPreference = 'Continue'
+. "$PSScriptRoot\..\lib\Common.ps1"   # for Get-LabArtifactManifest / Test-LabArtifactChecksum (LabLogic)
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 项目根
 $rulesSigma = Join-Path $root 'rules\sigma'
@@ -62,6 +63,19 @@ if ($YaraZip -and (Test-Path $YaraZip)) {
 } else {
     Write-Host "[WARN] 未提供 YARA。下载 VirusTotal/yara 的 Windows 发行版 zip(地址见 docs\downloads.md)," -ForegroundColor Yellow
     Write-Host "       用 -YaraZip 指定路径重跑,或手动解压 yara64.exe 到 $tools" -ForegroundColor Yellow
+}
+
+# 可复现:若 config\versions.psd1 钉了 yara64.exe 的 SHA256,则校验,确保用的是产出证据时的同一构建。
+if (Test-Path $yaraExe) {
+    try {
+        $pin   = (Get-LabArtifactManifest).Yara.ExeSha256
+        $match = Test-LabArtifactChecksum -Path $yaraExe -ExpectedSha256 $pin
+        if ($match -eq $true)      { Write-Host "[ OK ] yara64.exe 与 versions.psd1 钉定的 SHA256 一致(可复现)。" -ForegroundColor Green }
+        elseif ($match -eq $false) { Write-Host "[WARN] yara64.exe 的 SHA256 与 versions.psd1 不一致 —— 与产出证据时的构建不同,结果可能无法复现。" -ForegroundColor Yellow }
+        else                       { Write-Host "[INFO] versions.psd1 未钉 yara64.exe 哈希,跳过校验。" -ForegroundColor Gray }
+    } catch {
+        Write-Host "[INFO] 未能加载 versions.psd1($($_.Exception.Message)),跳过 yara 校验。" -ForegroundColor Gray
+    }
 }
 
 # 目录占位说明
