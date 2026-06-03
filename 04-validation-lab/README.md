@@ -86,7 +86,7 @@ CafeSec-Lab/
 │     ├─ Setup-RuleEngines.ps1
 │     └─ Invoke-YaraScan.ps1
 ├─ rules/{sigma,yara}/           ← 你之后放自己的规则
-├─ docs/                         ← 总览、隔离原理、域+WEF、下载清单
+├─ docs/                         ← 总览、隔离原理、域+WEF、下载清单、防御验证 runbook(04)
 └─ downloads/                    ← 下载的安装包/工具暂存
 ```
 
@@ -96,6 +96,7 @@ CafeSec-Lab/
 
 > 全程在**管理员 PowerShell** 中,工作目录切到 `scripts\`。脚本均幂等,可重复运行。
 > 先读 `docs\02-network-isolation.md` 理解【两阶段搭建】再开始。
+> 搭好后用 `docs\04-defensive-validation-runbook.md` 驱动测试与证据产出(纯 benign 刺激,含 reviewer gate)。
 
 ### A. 宿主准备(+ 建 VM)
 > **推荐**:用一键编排把宿主侧步骤 A+C 跑完(预检→启用 Hyper-V→建隔离交换机→建 VM→验证),

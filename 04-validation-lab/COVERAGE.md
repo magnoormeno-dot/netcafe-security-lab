@@ -10,6 +10,10 @@ reproducible environment* — not field-validated production results. Per the re
 "What This Project Will Not Publish" policy, lab output must be human-reviewed before it is cited as
 evidence in `docs/cvp/` or `docs/pilot/`.
 
+> **Step-by-step test procedure** (benign stimulus → expected telemetry/alert → evidence → rollback →
+> safety boundary → reviewer gate) for every row below: see
+> [`docs/04-defensive-validation-runbook.md`](docs/04-defensive-validation-runbook.md).
+
 Status legend: **✅ validated** (lab generates the telemetry and the rule/monitor can be exercised end-to-end) ·
 **◐ partial** (lab demonstrates the principle at single-host scale; full venue scope needs physical VLANs/firewall) ·
 **○ out-of-lab** (depends on physical network gear the single-host lab does not model).
