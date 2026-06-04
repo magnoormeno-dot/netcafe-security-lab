@@ -18,9 +18,9 @@
 
 | Field | Value |
 | --- | --- |
-| Generated | 2026-06-03 23:04:30 UTC |
-| Source report | rule-validation-20260604-070430.jsonl |
-| Repo commit | 5f8ee14 (docs/validation-lab-runbook) |
+| Generated | 2026-06-04 09:57:49 UTC |
+| Source report | rule-validation-20260604-175741.jsonl |
+| Repo commit | 3e885e3 (docs/validation-lab-runbook) |
 | Runtime | Windows PowerShell 5.1.26100.8457 on Microsoft Windows NT 10.0.26200.0 |
 | Rule source | `01-hardening-checklist/detection/` |
 
