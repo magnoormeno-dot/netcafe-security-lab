@@ -39,6 +39,13 @@ WEF (`ForwardedEvents`) + Wazuh.
 > The Sigma rule `billing_process_termination.yml` already lists *"Lab validation of the incident
 > response playbook"* as an expected false-positive — this module is that lab.
 
+> **Live-fire run (2026-06-04).** All three Sigma rules above were lit **3/3** by benign, reversible,
+> lab-owned stimuli on a real domain endpoint (CSL-Client01) in the running, air-gapped `cafesec.lab`
+> (DC + Sysmon on 3 VMs + WEF pipeline), each captured with a timestamp and the verbatim event field
+> (Sysmon EID 1 / System 7045 / Security 4657). See
+> [`../docs/cvp/live-fire-evidence.md`](../docs/cvp/live-fire-evidence.md). This is the live-fire
+> counterpart to the offline 6/6 convert/compile evidence — synthetic/benign, not field-validated.
+
 ## B. Integrity monitor (`02-integrity-monitor`) → lab
 
 | Capability | Lab realization | Status |
