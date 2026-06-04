@@ -53,6 +53,24 @@ All three rules lit on benign stimuli — **3/3** (run 2026-06-04, CSL-Client01)
 > subcategory + a SetValue SACL on the watched key (set and **reverted** by the capture script), since
 > the rule keys on Security 4657.
 
+## Cross-host pipeline proof (endpoint -> WEF -> collector)
+
+The same benign-stimulus events were confirmed **forwarded to the central collector** (CSL-Server)
+`ForwardedEvents` log via the WEF pipeline — proving the full defensive data path, not just local capture.
+At verify time all three WEF sources were `RunTimeStatus: Active` (LastError 0, fresh heartbeats) with
+**529 events** already collected:
+
+| Live-fire marker | In `ForwardedEvents` on CSL-Server |
+| --- | --- |
+| `CafeSecDummyBilling` (TC1) | ✅ FOUND from `CSL-Client01.cafesec.lab`, EID 1, 19:39:19 |
+| `CafeSecWatchdogDummy` (TC2) | ✅ FOUND from `CSL-Client01.cafesec.lab`, EID 4688, 19:39:27 |
+| `VenueBilling` (TC3, Security 4657) | pending (forwarding latency / confirm 4657 is in the subscription query) |
+
+> The full path is demonstrated: benign stimulus -> endpoint Sysmon/Security/System log -> WEF (Kerberos,
+> source-initiated) -> collector `ForwardedEvents`, with the forwarded record carrying the source host,
+> EventID, and timestamp. Re-running the verifier (`cafesec-m4-wef-verify.ps1`) after a short delay picks
+> up later-forwarded events. Reproduce: `wecutil gr CafeSec-Security` on CSL-Server.
+
 ## Map to the runbook
 
 These correspond to the benign test cases in
