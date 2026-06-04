@@ -30,12 +30,15 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     python -m pip install --upgrade pip
     python -m pip install sigma-cli
     # sigma 是 pip 安装的控制台脚本;若其 Scripts 目录尚未进 PATH,直接调用会抛 CommandNotFound,
-    # 且 $LASTEXITCODE 会保留上一条(pip)的 0 而误判成功。故先解析命令,显式置零再核对 $? 与退出码。
+    # 且 $LASTEXITCODE 会保留上一条(pip)的 0 而误判成功。故先解析命令,再显式置零后只核对退出码。
+    # 注意:'sigma plugin install' 底层走 pip,会往 stderr 写进度,这会把 $? 翻成 $false ——
+    # 因此【不能】用 $? 判定成败(否则后端装成功了也会误报 WARN),只信 $LASTEXITCODE。
+    # 与 Invoke-RuleValidation.ps1 的同类修复保持一致。
     $sigmaCmd = Get-Command sigma -ErrorAction SilentlyContinue
     if ($sigmaCmd) {
         $global:LASTEXITCODE = 0
         & $sigmaCmd plugin install opensearch
-        $ok = ($? -and $LASTEXITCODE -eq 0)
+        $ok = ($LASTEXITCODE -eq 0)
     } else {
         Write-Host "[WARN] 安装后未在 PATH 找到 sigma(可能 Python Scripts 目录未加入 PATH)。请重开 PowerShell 或把该目录加入 PATH 后重试: sigma plugin install opensearch" -ForegroundColor Yellow
         $ok = $false
