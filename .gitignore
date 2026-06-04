@@ -45,6 +45,7 @@ Thumbs.db
 # 04-validation-lab (large or generated artifacts — never commit)
 04-validation-lab/downloads/
 04-validation-lab/reports/
+04-validation-lab/logs/
 *.iso
 *.vhdx
 *.vhd

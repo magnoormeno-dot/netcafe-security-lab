@@ -113,6 +113,32 @@ bash scripts/wazuh/install-wazuh-manager.sh                    # Ubuntu(CSL-Wazu
 
 ---
 
+## M2 装机踩坑速查(实测)
+
+- **Win11 VM 开机报 `0xC000A002`「已计算的身份验证标记与输入的身份验证标记不匹配」**:
+  vTPM 的 key protector 失效(常见于宿主 Guardian 密钥变动后)。VM 无法初始化、起不来。修复(管理员,VM 关机状态):
+  ```powershell
+  Stop-VM CSL-Client01 -TurnOff -Force -ErrorAction SilentlyContinue
+  Set-VMKeyProtector -VMName CSL-Client01 -NewLocalKeyProtector   # 重建本地 key protector
+  Enable-VMTPM       -VMName CSL-Client01                          # 重新挂上 vTPM
+  Start-VM           -Name  CSL-Client01
+  ```
+  > Win11/Server 必须保留 `SecureBoot=On` + `SecureBootTemplate=MicrosoftWindows` + vTPM;别为了绕错而关掉它们(会触发 Win11 的 TPM 检查失败)。
+
+- **CSL-Wazuh(Ubuntu)黑屏 / "Boot failed" / Secure Boot 报错**:Gen2 默认 Secure Boot 模板是 `MicrosoftWindows`,挡 Ubuntu。修复:
+  ```powershell
+  Stop-VM CSL-Wazuh -TurnOff -Force
+  Set-VMFirmware CSL-Wazuh -SecureBootTemplate MicrosoftUEFICertificateAuthority
+  Start-VM CSL-Wazuh
+  ```
+
+- **气隙下进 VM 跑命令 / 验证装机** —— 用 **PowerShell Direct**(走 VMBus,不需要网络,隔离全程不破):
+  ```powershell
+  $cred = [pscredential]::new('labadmin', (ConvertTo-SecureString 'CafeSecLab!2026' -AsPlainText -Force))
+  Invoke-Command -VMName CSL-Server -Credential $cred -ScriptBlock { hostname; (Get-CimInstance Win32_OperatingSystem).Caption }
+  ```
+  起得来、能 `Invoke-Command` 进去 = 该台装完了(比单看 `Get-VM` 的 Uptime 可靠)。工具注入同理用 `Copy-VMFile`(见 [`downloads.md`](downloads.md)),无需切到联网交换机。
+
 ## 断点续跑 / 卡住了?
 - 所有宿主脚本**幂等**:任意一步失败,排查后重跑即可(`Invoke-LabSetup.ps1` 会跳过已完成步骤)。
 - 拆了重来:`.\Reset-Lab.ps1 -WhatIf` 看清单,确认后 `.\Reset-Lab.ps1`(只删 4 台 CSL VM + 隔离交换机,绝不碰你其它 VM/交换机)。
