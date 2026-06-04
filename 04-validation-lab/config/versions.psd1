@@ -14,22 +14,22 @@
 #
 @{
     Sysmon = @{
-        Version = '15.15'                # Sysinternals Sysmon (confirm exact on the download page)
-        Sha256  = ''                     # fill after first official download of Sysmon.zip / Sysmon64.exe
+        Version = '15.20'                # Sysinternals Sysmon (Sysmon64.exe from Sysmon.zip, downloaded 2026-06-04)
+        Sha256  = 'D8115212A7747010593DE813404B02D05B915E4B1D0231502B856B9ACE9274E8'  # Sysmon64.exe
         Source  = 'https://learn.microsoft.com/sysinternals/downloads/sysmon'
     }
 
     SysmonConfig = @{
         Repo      = 'https://github.com/SwiftOnSecurity/sysmon-config'
         # Pin to a REVIEWED commit instead of master so the baseline can't drift under you.
-        PinCommit = ''                   # e.g. a 40-char commit SHA you reviewed; '' = using master (NOT reproducible)
+        PinCommit = '1836897f12fbd6a0a473665ef6abc34a6b497e31'  # last change to sysmonconfig-export.xml (2021-10-17)
         File      = 'sysmonconfig-export.xml'
-        Sha256    = ''                   # fill after pinning a commit and downloading that revision
+        Sha256    = '055FEBC600E6D7448CDF3812307275912927A62B1F94D0D933B64B294BC87162'  # at the pinned commit
     }
 
     Wazuh = @{
-        Version = '4.9'                  # pin the exact x.y.z you validate against (confirm on the release page)
-        Sha256  = ''                     # agent MSI / installer hash, filled after official download
+        Version = '4.9.2'                # wazuh-agent-4.9.2-1.msi (latest in the 4.9 line, downloaded 2026-06-04)
+        Sha256  = '88B40D63185D308C898DC237B0D5BA0EE1CA2AB41E6B38DB28D1D6B3B20A616D'  # agent MSI
         Source  = 'https://documentation.wazuh.com/current/installation-guide/'
     }
 
@@ -57,8 +57,8 @@
     # OS images: eval ISOs expire (~180 days) and are re-spun, so a build hash + a captured
     # build label is the only way to know two people used the same media.
     Isos = @{
-        Ubuntu        = @{ File = 'ubuntu-24.04-live-server-amd64.iso'; Build = '24.04.x'; Sha256 = '' }
-        WinServer2022 = @{ File = 'windows-server-2022-eval.iso';        Build = '';        Sha256 = '' }
-        Win11Ent      = @{ File = 'windows-11-enterprise-eval.iso';      Build = '';        Sha256 = '' }
+        Ubuntu        = @{ File = 'ubuntu-24.04-live-server-amd64.iso'; Build = '24.04.x'; Sha256 = 'E907D92EEEC9DF64163A7E454CBC8D7755E8DDC7ED42F99DBC80C40F1A138433' }
+        WinServer2022 = @{ File = 'windows-server-2022-eval.iso';        Build = '20348';   Sha256 = '3E4FA6D8507B554856FC9CA6079CC402DF11A8B79344871669F0251535255325' }
+        Win11Ent      = @{ File = 'windows-11-enterprise-eval.iso';      Build = '26200';   Sha256 = 'A61ADEAB895EF5A4DB436E0A7011C92A2FF17BB0357F58B13BBC4062E535E7B9' }
     }
 }
