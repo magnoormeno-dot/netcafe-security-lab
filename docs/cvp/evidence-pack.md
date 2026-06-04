@@ -17,7 +17,7 @@ cafes, gaming venues, esports hotels, and managed shared-PC fleets.
 | Project home | <https://cafeseclab.com/> |
 | Research site | <https://research.cafeseclab.com/> |
 | Main repository | <https://github.com/magnoormeno-dot/netcafe-security-lab> |
-| Latest release | <https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.1.1> |
+| Latest release | <https://github.com/magnoormeno-dot/netcafe-security-lab/releases/tag/v0.2.0> |
 | Project goal | <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/roadmap/project-goal.md> |
 | v0.2 roadmap | <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/roadmap/v0.2.md> |
 | Security policy | <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/.github/SECURITY.md> |
@@ -116,8 +116,9 @@ Default data policy:
 | Roadmap | `docs/roadmap/project-goal.md` and `docs/roadmap/v0.2.md` |
 | Synthetic pilot evidence | `docs/pilot/synthetic-shared-pc-venue/` |
 | CVP application brief | `docs/cvp/application-brief.md` |
-| Validation lab | `04-validation-lab/` — reproducible, network-isolated Hyper-V/domain testbed (Sysmon/WEF/Wazuh) |
+| Validation lab | `04-validation-lab/` — reproducible, network-isolated Hyper-V/domain testbed (Sysmon/WEF/Wazuh), built and validated with a 58-test Pester suite (100% LabLogic coverage) |
 | Lab validation evidence | `docs/cvp/lab-validation-evidence.md` — synthetic, reproducible, generated from rule-validation runs and human-reviewed |
+| Live-fire detection evidence | `docs/cvp/live-fire-evidence.md` — benign, reversible, lab-owned stimuli in a running air-gapped lab (`cafesec.lab` DC + 3 VMs); all 3 Sigma rules lit 3/3 with Sysmon/System/Security telemetry and WEF cross-host forwarding verified; synthetic and human-reviewed |
 
 ## Current Technical Quality Signals
 
@@ -130,9 +131,10 @@ As of the current public state:
   `security.txt` are part of the maintenance playbook;
 - the project has a documented coordinated disclosure policy;
 - detection content is framed as vendor-neutral and defensive;
-- a reproducible validation lab (`04-validation-lab/`) exercises the detection rules and integrity
-  monitor on real Sysmon/WEF/Wazuh telemetry, with its own PSScriptAnalyzer + UTF-8 BOM lint CI;
-  its output is labelled synthetic and human-reviewed before it is cited as evidence.
+- a reproducible validation lab (`04-validation-lab/`) has been built and exercises the detection rules
+  and integrity monitor on real Sysmon/WEF/Wazuh telemetry, with its own PSScriptAnalyzer + UTF-8 BOM
+  lint CI; a live-fire run (2026-06-04) confirmed all three Sigma rules fire on benign, reversible,
+  lab-owned stimuli; its output is labelled synthetic and human-reviewed before it is cited as evidence.
 
 ## Intended Claude / AI Assistance Patterns
 

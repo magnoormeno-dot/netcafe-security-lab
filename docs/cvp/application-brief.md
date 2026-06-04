@@ -8,7 +8,7 @@ safeguards.
 
 CafeSec Lab is an independent defensive security research project for internet
 cafes, gaming venues, esports hotels, and managed shared-PC fleets. The project
-publishes vendor-neutral hardening guidance, detection rules, integrity
+publishes vendor-neutral hardening guidance, validated detection rules, integrity
 monitoring tooling, and operator-facing reporting templates.
 
 Public links:
@@ -18,6 +18,8 @@ Public links:
 - Research site: <https://research.cafeseclab.com/>
 - Evidence pack:
   <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/cvp/evidence-pack.md>
+- Live-fire detection evidence (v0.2.0, synthetic validation):
+  <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/cvp/live-fire-evidence.md>
 - Security policy:
   <https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/.github/SECURITY.md>
 - Security contact: `security@cafeseclab.com`
@@ -55,6 +57,7 @@ Project home: https://cafeseclab.com/
 Repository: https://github.com/magnoormeno-dot/netcafe-security-lab
 Research site: https://research.cafeseclab.com/
 Evidence pack: https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/cvp/evidence-pack.md
+Live-fire detection evidence (v0.2.0): https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/docs/cvp/live-fire-evidence.md
 Security policy: https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/.github/SECURITY.md
 Security contact: security@cafeseclab.com
 
