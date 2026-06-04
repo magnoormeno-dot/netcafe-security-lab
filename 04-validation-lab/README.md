@@ -86,7 +86,7 @@ CafeSec-Lab/
 │     ├─ Setup-RuleEngines.ps1
 │     └─ Invoke-YaraScan.ps1
 ├─ rules/{sigma,yara}/           ← 你之后放自己的规则
-├─ docs/                         ← 总览、隔离原理、域+WEF、下载清单
+├─ docs/                         ← 总览、隔离原理、域+WEF、下载清单、防御验证 runbook(04)
 └─ downloads/                    ← 下载的安装包/工具暂存
 ```
 
@@ -96,6 +96,7 @@ CafeSec-Lab/
 
 > 全程在**管理员 PowerShell** 中,工作目录切到 `scripts\`。脚本均幂等,可重复运行。
 > 先读 `docs\02-network-isolation.md` 理解【两阶段搭建】再开始。
+> 搭好后用 `docs\04-defensive-validation-runbook.md` 驱动测试与证据产出(纯 benign 刺激,含 reviewer gate)。
 
 ### A. 宿主准备(+ 建 VM)
 > **推荐**:用一键编排把宿主侧步骤 A+C 跑完(预检→启用 Hyper-V→建隔离交换机→建 VM→验证),
@@ -114,7 +115,7 @@ cd 04-validation-lab\scripts            # 从克隆下来的仓库根目录进�
 ```
 
 ### B. 下载镜像与工具(临时联网阶段)
-- 按 `docs\downloads.md` 下载 4 个 ISO 到 `E:\CafeSec-Lab\ISO\`(文件名对齐 config)。
+- 按 `docs\downloads.md` 下载 **3 个 ISO**(Win11 Enterprise、Server 2022、Ubuntu 24.04;两台客户机 CSL-Client01/02 复用同一 Win11 镜像)到 `E:\CafeSec-Lab\ISO\`(文件名对齐 config)。
 - 下载 Sysmon、SwiftOnSecurity 配置、Wazuh agent MSI、YARA、Python 等到 `downloads\`。
 
 ### C. 建 VM 并装系统
@@ -161,7 +162,7 @@ $cred = Get-Credential CAFESEC\Administrator
 **宿主侧 + 客户机侧两边全 PASS = 隔离合规**,环境就绪。
 
 ### G. 放入你的检测规则
-- Sigma 规则 → `rules\sigma\`,用 `sigma convert -t opensearch -p ecs_windows <rule>.yml` 转换(Wazuh 基于 OpenSearch;无官方 wazuh 后端)。
+- Sigma 规则 → `rules\sigma\`,用 `sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check <rule>.yml` 转换(Wazuh 基于 OpenSearch;backend target 为 `opensearch_lucene`)。
 - YARA 规则 → `rules\yara\`,用 `analysis\Invoke-YaraScan.ps1 -TargetPath ...` 扫描。
 
 ---

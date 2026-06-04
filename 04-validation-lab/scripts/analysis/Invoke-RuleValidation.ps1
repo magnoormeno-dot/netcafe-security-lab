@@ -36,7 +36,11 @@ param(
     [string]$YaraDir,
     [string]$Target,
     [string]$YaraExe,
-    [string]$Pipeline = 'ecs_windows'
+    [string]$Pipeline = 'ecs_windows',
+    # OpenSearch backend target. Current pySigma-backend-opensearch exposes 'opensearch_lucene'
+    # (the older 'opensearch' target name was removed). ecs_windows ECS mappings are valid for
+    # OpenSearch (an Elasticsearch fork), so we pass --disable-pipeline-check on the convert below.
+    [string]$SigmaTarget = 'opensearch_lucene'
 )
 $ErrorActionPreference = 'Continue'   # 规则转换/编译失败是数据,不应终止脚本
 . "$PSScriptRoot\..\lib\Common.ps1"
@@ -73,8 +77,10 @@ if (-not $sigmaCmd) {
         Where-Object { $_.Name -notlike '*example*' }   # 跳过 *.example.yml 调优样例
     foreach ($f in $sigmaFiles) {
         $global:LASTEXITCODE = 0
-        $out = & $sigmaCmd convert -t opensearch -p $Pipeline $f.FullName 2>&1
-        $ok = ($? -and $LASTEXITCODE -eq 0)
+        # sigma-cli writes progress ("Parsing Sigma rules") to stderr, so $? is unreliable here
+        # (it would flip to $false on any stderr write); judge success by the native exit code only.
+        $out = & $sigmaCmd convert -t $SigmaTarget -p $Pipeline --disable-pipeline-check $f.FullName 2>&1
+        $ok = ($LASTEXITCODE -eq 0)
         $msg = if ($ok) { 'converted' } else { (($out | Out-String).Trim() -split "`n" | Select-Object -First 2) -join ' ' }
         $results += [pscustomobject]@{ kind='sigma'; rule=$f.Name; ok=$ok; detail=$msg }
         Write-Host ("  {0} {1}" -f $(if($ok){'[ OK ]'}else{'[FAIL]'}), $f.Name) -ForegroundColor $(if($ok){'Green'}else{'Red'})

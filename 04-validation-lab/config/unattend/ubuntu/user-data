@@ -1,0 +1,31 @@
+#cloud-config
+# CafeSec Lab - Ubuntu 24.04 autoinstall (subiquity) for CSL-Wazuh.
+# Packaged into a NoCloud seed ISO (volume label CIDATA) by New-UnattendIso.ps1 and
+# attached as a second DVD during the Phase-1 (provisioning) install.
+#
+# STATUS: provisioning TEMPLATE - validate on first real build. Replace the password
+# hash before use (generate with: openssl passwd -6 'your-password').
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: csl-wazuh
+    username: cafesec
+    # CHANGE ME: 'openssl passwd -6 <password>' output. Placeholder below is intentionally invalid.
+    password: "$6$REPLACE$WITH_A_REAL_openssl_passwd_6_HASH_BEFORE_BUILDING"
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: lvm
+  packages:
+    - curl
+    - ca-certificates
+  # Install-time networking uses DHCP on the temporary provisioning switch.
+  # The isolated static IP (10.10.10.10/24, no gateway) is applied later in Phase 2
+  # via netplan (see config/ubuntu/) after Switch-LabNetwork.ps1 -Phase Isolated.
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable ssh

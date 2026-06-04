@@ -74,7 +74,7 @@ if ($StartAt -gt $StopAt) { Write-Fail "StartAt($StartAt) 大于 StopAt($StopAt)
 
 # ---- 前置硬性检查(locale-safe;不满足直接停)----
 $edition = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
-if ($edition -match '^Core') {
+if (Test-IsHomeEdition -EditionId $edition) {
     Write-Fail "当前为 Home 版($edition),不含 Hyper-V。需要 Pro/Enterprise/Education/Server。"
     return
 }
@@ -119,9 +119,10 @@ foreach ($s in $steps) {
     # Hyper-V 重启关口:启用后,创建交换机/VM 依赖 vmms 服务运行 + Hyper-V 模块就绪。
     if ($s.RebootGate -and -not $DryRun) {
         $vmms = Get-Service vmms -ErrorAction SilentlyContinue
-        $usable = $vmms -and $vmms.Status -eq 'Running' -and (Get-Command New-VMSwitch -ErrorAction SilentlyContinue)
         $rebootPending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
-        if (-not $usable -or $rebootPending) {
+        # reboot-gate 判定抽进 LabLogic\Test-HyperVRebootGate(纯函数,见 tests\LabLogic.Tests.ps1)。
+        $needsReboot = Test-HyperVRebootGate -VmmsStatus ([string]$vmms.Status) -HasSwitchCmdlet ([bool](Get-Command New-VMSwitch -ErrorAction SilentlyContinue)) -RebootPending $rebootPending
+        if ($needsReboot) {
             Write-Host ""
             Write-Warn2 "Hyper-V 已启用,但需要【重启】后才能继续(vmms 服务/Hyper-V 模块尚未就绪)。"
             Write-Host  "请重启本机,然后重新运行(子脚本幂等,会自动跳过已完成步骤):" -ForegroundColor Yellow

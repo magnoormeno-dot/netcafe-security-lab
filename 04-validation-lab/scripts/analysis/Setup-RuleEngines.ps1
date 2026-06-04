@@ -14,6 +14,7 @@
 [CmdletBinding()]
 param([string]$YaraZip)
 $ErrorActionPreference = 'Continue'
+. "$PSScriptRoot\..\lib\Common.ps1"   # for Get-LabArtifactManifest / Test-LabArtifactChecksum (LabLogic)
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 项目根
 $rulesSigma = Join-Path $root 'rules\sigma'
@@ -29,12 +30,15 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     python -m pip install --upgrade pip
     python -m pip install sigma-cli
     # sigma 是 pip 安装的控制台脚本;若其 Scripts 目录尚未进 PATH,直接调用会抛 CommandNotFound,
-    # 且 $LASTEXITCODE 会保留上一条(pip)的 0 而误判成功。故先解析命令,显式置零再核对 $? 与退出码。
+    # 且 $LASTEXITCODE 会保留上一条(pip)的 0 而误判成功。故先解析命令,再显式置零后只核对退出码。
+    # 注意:'sigma plugin install' 底层走 pip,会往 stderr 写进度,这会把 $? 翻成 $false ——
+    # 因此【不能】用 $? 判定成败(否则后端装成功了也会误报 WARN),只信 $LASTEXITCODE。
+    # 与 Invoke-RuleValidation.ps1 的同类修复保持一致。
     $sigmaCmd = Get-Command sigma -ErrorAction SilentlyContinue
     if ($sigmaCmd) {
         $global:LASTEXITCODE = 0
         & $sigmaCmd plugin install opensearch
-        $ok = ($? -and $LASTEXITCODE -eq 0)
+        $ok = ($LASTEXITCODE -eq 0)
     } else {
         Write-Host "[WARN] 安装后未在 PATH 找到 sigma(可能 Python Scripts 目录未加入 PATH)。请重开 PowerShell 或把该目录加入 PATH 后重试: sigma plugin install opensearch" -ForegroundColor Yellow
         $ok = $false
@@ -42,9 +46,9 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     if ($ok) {
         Write-Host "[ OK ] sigma-cli + opensearch 后端已安装。示例转换:" -ForegroundColor Green
         Write-Host "  # 生成 Lucene 查询(可在 Wazuh Dashboard / OpenSearch 使用):" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "  sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check $rulesSigma\your_rule.yml" -ForegroundColor Gray
         Write-Host "  # 生成 OpenSearch 告警监控规则 JSON:" -ForegroundColor Gray
-        Write-Host "  sigma convert -t opensearch -f monitor_rule -p ecs_windows $rulesSigma\your_rule.yml" -ForegroundColor Gray
+        Write-Host "  sigma convert -t opensearch_lucene -f monitor_rule -p ecs_windows --disable-pipeline-check $rulesSigma\your_rule.yml" -ForegroundColor Gray
     } else {
         Write-Host "[WARN] sigma opensearch 后端安装未成功(可能正处于断网阶段或 sigma 不在 PATH)。请在临时联网阶段重试: sigma plugin install opensearch" -ForegroundColor Yellow
     }
@@ -64,8 +68,21 @@ if ($YaraZip -and (Test-Path $YaraZip)) {
     Write-Host "       用 -YaraZip 指定路径重跑,或手动解压 yara64.exe 到 $tools" -ForegroundColor Yellow
 }
 
+# 可复现:若 config\versions.psd1 钉了 yara64.exe 的 SHA256,则校验,确保用的是产出证据时的同一构建。
+if (Test-Path $yaraExe) {
+    try {
+        $pin   = (Get-LabArtifactManifest).Yara.ExeSha256
+        $match = Test-LabArtifactChecksum -Path $yaraExe -ExpectedSha256 $pin
+        if ($match -eq $true)      { Write-Host "[ OK ] yara64.exe 与 versions.psd1 钉定的 SHA256 一致(可复现)。" -ForegroundColor Green }
+        elseif ($match -eq $false) { Write-Host "[WARN] yara64.exe 的 SHA256 与 versions.psd1 不一致 —— 与产出证据时的构建不同,结果可能无法复现。" -ForegroundColor Yellow }
+        else                       { Write-Host "[INFO] versions.psd1 未钉 yara64.exe 哈希,跳过校验。" -ForegroundColor Gray }
+    } catch {
+        Write-Host "[INFO] 未能加载 versions.psd1($($_.Exception.Message)),跳过 yara 校验。" -ForegroundColor Gray
+    }
+}
+
 # 目录占位说明
-Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "把你的 Sigma 规则(.yml)放在此目录。用 sigma convert -t opensearch -p ecs_windows <rule>.yml 转换(详见 Setup-RuleEngines.ps1 输出与 README.md)。" -Encoding UTF8
+Set-Content -Path (Join-Path $rulesSigma 'README.txt') -Value "把你的 Sigma 规则(.yml)放在此目录。用 sigma convert -t opensearch_lucene -p ecs_windows --disable-pipeline-check <rule>.yml 转换(详见 Setup-RuleEngines.ps1 输出与 README.md)。" -Encoding UTF8
 Set-Content -Path (Join-Path $rulesYara  'README.txt') -Value "把你的 YARA 规则(.yar/.yara)放在此目录。用 scripts\analysis\Invoke-YaraScan.ps1 扫描。" -Encoding UTF8
 
 Write-Host "`n目录就绪:" -ForegroundColor Gray

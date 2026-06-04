@@ -10,6 +10,10 @@ reproducible environment* — not field-validated production results. Per the re
 "What This Project Will Not Publish" policy, lab output must be human-reviewed before it is cited as
 evidence in `docs/cvp/` or `docs/pilot/`.
 
+> **Step-by-step test procedure** (benign stimulus → expected telemetry/alert → evidence → rollback →
+> safety boundary → reviewer gate) for every row below: see
+> [`docs/04-defensive-validation-runbook.md`](docs/04-defensive-validation-runbook.md).
+
 Status legend: **✅ validated** (lab generates the telemetry and the rule/monitor can be exercised end-to-end) ·
 **◐ partial** (lab demonstrates the principle at single-host scale; full venue scope needs physical VLANs/firewall) ·
 **○ out-of-lab** (depends on physical network gear the single-host lab does not model).
@@ -34,6 +38,13 @@ WEF (`ForwardedEvents`) + Wazuh.
 
 > The Sigma rule `billing_process_termination.yml` already lists *"Lab validation of the incident
 > response playbook"* as an expected false-positive — this module is that lab.
+
+> **Live-fire run (2026-06-04).** All three Sigma rules above were lit **3/3** by benign, reversible,
+> lab-owned stimuli on a real domain endpoint (CSL-Client01) in the running, air-gapped `cafesec.lab`
+> (DC + Sysmon on 3 VMs + WEF pipeline), each captured with a timestamp and the verbatim event field
+> (Sysmon EID 1 / System 7045 / Security 4657). See
+> [`../docs/cvp/live-fire-evidence.md`](../docs/cvp/live-fire-evidence.md). This is the live-fire
+> counterpart to the offline 6/6 convert/compile evidence — synthetic/benign, not field-validated.
 
 ## B. Integrity monitor (`02-integrity-monitor`) → lab
 

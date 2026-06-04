@@ -37,18 +37,17 @@ else { Write-Ok "宿主无该交换机的 vEthernet 网卡(宿主无法 ping 通
 
 # 4) 宿主在三层也到不了隔离网段:用 Find-NetRoute 做最长前缀匹配实测,
 #    可捕获汇总/覆盖路由(如 10.0.0.0/8、10.10.0.0/16、/32),弥补精确字符串匹配的盲区。
-$probeIp = ($cfg.VMs | Where-Object { $_.IP } | Select-Object -First 1 -ExpandProperty IP)
+# NB: $cfg.VMs items are hashtables — member access ($_.IP) reads the key, but
+# Select-Object -ExpandProperty IP throws ("找不到属性 IP") because a Hashtable's
+# keys are not surfaced as properties. Project the value with ForEach-Object instead.
+$probeIp = ($cfg.VMs | Where-Object { $_.IP } | ForEach-Object { $_.IP } | Select-Object -First 1)
 if (-not $probeIp) { $probeIp = '10.10.10.10' }
 $nr = Find-NetRoute -RemoteIPAddress $probeIp -ErrorAction SilentlyContinue
 # Find-NetRoute 同时返回路由对象与源 NetIPAddress 对象;后者无 DestinationPrefix。
 # 必须先要求 DestinationPrefix 非空(否则该对象恒通过过滤 -> 永远误报 FAIL),
 # 再排除默认路由的所有写法(含 /1 拆分默认路由)与回环。
-$reach = $nr | Where-Object {
-    $_.DestinationPrefix -and
-    ($_.DestinationPrefix -notin @('0.0.0.0/0','0.0.0.0/1','128.0.0.0/1','::/0','::/1','8000::/1')) -and
-    ($_.DestinationPrefix -notlike '127.*') -and
-    ($_.DestinationPrefix -ne '::1/128')
-}
+# 过滤逻辑抽进 LabLogic\Select-IsolationLeakRoute(纯函数,见 tests\LabLogic.Tests.ps1)。
+$reach = Select-IsolationLeakRoute -Route $nr
 if ($reach) { Write-Fail "宿主存在通往 $probeIp 的具体路由($(($reach.DestinationPrefix) -join ', '))—— 三层可能可达隔离网!"; $fail++ }
 else { Write-Ok "宿主无通往隔离网段的具体路由(三层到不了 $probeIp)" }
 

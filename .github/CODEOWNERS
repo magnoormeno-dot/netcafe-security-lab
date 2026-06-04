@@ -1,0 +1,14 @@
+# Code owners for netcafe-security-lab.
+# These owners are requested for review on matching changes (and can enforce review
+# once branch protection requires CODEOWNERS approval).
+
+# Default owner for everything.
+*                         @magnoormeno-dot
+
+# Validation lab, its tests, and CI are safety-critical (destructive Hyper-V scripts,
+# isolation logic, evidence generation) — always route review through the maintainer.
+/04-validation-lab/       @magnoormeno-dot
+/.github/workflows/       @magnoormeno-dot
+
+# Detection rules feed the evidence pipeline.
+/01-hardening-checklist/detection/   @magnoormeno-dot
