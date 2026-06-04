@@ -38,17 +38,20 @@
 
 ## Results — detection rules lit by benign stimuli
 
+All three rules lit on benign stimuli — **3/3** (run 2026-06-04, CSL-Client01):
+
 | # | Rule (`01-hardening-checklist/detection/sigma/`) | Benign stimulus (lab dummy) | Telemetry the rule keys on | Hit | Captured evidence |
 | --- | --- | --- | --- | --- | --- |
-| TC1 | `billing_process_termination.yml` | `sc.exe stop CafeSecDummyBilling` (service never existed) | Sysmon **EID 1** process_creation (Image+CommandLine) | ✅ **HIT** | `Image: C:\Windows\System32\sc.exe  CommandLine: "...\sc.exe" stop CafeSecDummyBilling` |
-| TC2 | `critical_service_disabled.yml` | `sc.exe create CafeSecWatchdogDummy` then delete (do-nothing dummy) | System **7045** service installed | ✅ **HIT** | `A service was installed... Service Name: CafeSecWatchdogDummy  Service Type: user mode service  Start Type: demand start` |
-| TC3 | `anomalous_registry_modification.yml` | set `HKLM\SOFTWARE\VenueBilling\UpdateUrl` (fictional key) | Security **4657** registry value modified | ◐ pending | requires the Registry-audit subcategory + a SetValue SACL; the capture script now enables/sets/reverts both (5-arg `RegistryAuditRule`) — re-run to confirm |
+| TC1 | `billing_process_termination.yml` | `sc.exe stop CafeSecDummyBilling` (service never existed) | Sysmon **EID 1** process_creation (Image+CommandLine) | ✅ **HIT** 19:27:30 | `Image: C:\Windows\System32\sc.exe  CommandLine: "...\sc.exe" stop CafeSecDummyBilling` |
+| TC2 | `critical_service_disabled.yml` | `sc.exe create CafeSecWatchdogDummy` then delete (do-nothing dummy) | System **7045** service installed | ✅ **HIT** 19:27:34 | `A service was installed... Service Name: CafeSecWatchdogDummy  Service Type: user mode service  Start Type: demand start` |
+| TC3 | `anomalous_registry_modification.yml` | set `HKLM\SOFTWARE\VenueBilling\UpdateUrl` (fictional key) | Security **4657** registry value modified | ✅ **HIT** 19:33:05 | `Object Name: \REGISTRY\MACHINE\SOFTWARE\VenueBilling  Object Value Name: UpdateUrl` |
 
-> **Interpretation.** TC1 and TC2 are confirmed end-to-end: a benign, reversible stimulus on a real
-> domain endpoint produced exactly the telemetry the corresponding Sigma rule selects on, captured live.
-> This is the live-fire counterpart to the offline 6/6 convert/compile evidence. TC3 keys on Windows
-> Security 4657, which requires registry object-access auditing (a deliberate baseline-hardening item);
-> the stimulus is rule-correct and the capture path is in place.
+> **Interpretation.** All three rules are confirmed end-to-end: a benign, reversible stimulus on a real
+> domain endpoint produced exactly the telemetry the corresponding Sigma rule selects on, captured live
+> with a timestamp and the verbatim event field. This is the live-fire counterpart to the offline 6/6
+> convert/compile evidence. TC3 additionally required enabling the Windows Registry object-access audit
+> subcategory + a SetValue SACL on the watched key (set and **reverted** by the capture script), since
+> the rule keys on Security 4657.
 
 ## Map to the runbook
 
