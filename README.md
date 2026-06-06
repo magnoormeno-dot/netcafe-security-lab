@@ -99,6 +99,22 @@ Security and vulnerability disclosure: `security@cafeseclab.com`
 
 Public research identity: `CafeSec Lab Research Team`
 
+### Maintainer Identity and Account Linkage
+
+CafeSec Lab is maintained by a single accountable individual. The following
+personal accounts are published as a verifiable identity link between the human
+maintainer, this repository, and the AI-provider accounts used for authorized
+defensive research (including any cyber verification review):
+
+- Primary / GitHub and AI-provider account: `magnoormeno@gmail.com`
+- Secure correspondence account: `mandyminss@protonmail.com`
+- GitHub identity: [`magnoormeno-dot`](https://github.com/magnoormeno-dot)
+
+Role-based domain addresses (`security@`, `research@`, `contact@cafeseclab.com`)
+remain the preferred channels for operational and disclosure contact. The
+personal accounts above exist to bind the same real person to the project across
+GitHub, the AI provider, and out-of-band secure email.
+
 Sensitive reports should follow the secure-channel instructions in [`.github/SECURITY.md`](.github/SECURITY.md).
 
 ## License

@@ -26,6 +26,15 @@ cafes, gaming venues, esports hotels, and managed shared-PC fleets.
 | Security.txt | <https://cafeseclab.com/.well-known/security.txt> |
 | HackerOne profile | <https://hackerone.com/eshine> |
 | LinkedIn profile | <https://www.linkedin.com/in/shine-e-480463410/> |
+| Maintainer primary / AI-provider account | `magnoormeno@gmail.com` |
+| Maintainer secure correspondence account | `mandyminss@protonmail.com` |
+
+The two maintainer accounts above are published to bind a single accountable
+individual to this repository, the AI-provider account used for authorized
+defensive research, and an out-of-band secure email channel. The Gmail account is
+the GitHub (`magnoormeno-dot`) and AI-provider login; the Proton account is the
+secure correspondence address. Role-based domain addresses remain the preferred
+operational and disclosure channels.
 
 The project maintainer has completed OpenAI trusted access identity verification
 for authorized security work. This is included as an external trust signal, not

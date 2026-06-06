@@ -1,0 +1,17 @@
+# CafeSec Lab security.txt (RFC 9116)
+# Canonical location: https://cafeseclab.com/.well-known/security.txt
+# This file binds the CafeSec Lab project to its accountable maintainer.
+
+Contact: mailto:security@cafeseclab.com
+Contact: mailto:magnoormeno@gmail.com
+Contact: mailto:mandyminss@protonmail.com
+Expires: 2027-06-06T23:59:59.000Z
+Preferred-Languages: en, zh
+Canonical: https://cafeseclab.com/.well-known/security.txt
+Policy: https://github.com/magnoormeno-dot/netcafe-security-lab/blob/main/.github/SECURITY.md
+Acknowledgments: https://github.com/magnoormeno-dot/netcafe-security-lab
+
+# Maintainer identity linkage:
+#   GitHub:  https://github.com/magnoormeno-dot
+#   Primary / AI-provider account:        magnoormeno@gmail.com
+#   Secure correspondence account:        mandyminss@protonmail.com
