@@ -116,7 +116,7 @@ cd 04-validation-lab\scripts\analysis
 
 - **Benign stimulus**:在一个**被监控的占位键**(例如实验室自建的 `HKLM\Software\VenueBilling` 占位路径,或一个 lab-only 的 Run/服务键占位)写入一个**良性测试值**,由非 `svc_patch`/`svc_config` 的账户发起,在维护窗口内进行。前提是该键已开启**对象访问审核(SACL)**。
 - **Expected telemetry**:Security **EID 4657**(注册表值被修改);字段 `ObjectName(被监控键路径) / ObjectValueName(如 Run 项、服务 Start/ImagePath、日志开关、Proxy/DNS 值) / SubjectUserName / ProcessName / NewValue / Computer / TimeCreated`。
-- **Expected alert**:`anomalous_registry_modification.yml` 命中;approved-change 账户过滤(`svc_patch`/`svc_config`)对已审批变更应不告警。**若根本没有 4657 流** —— 这本身是发现(检测盲点,而非「无事」),说明该键审核未开。
+- **Expected alert**:`anomalous_registry_modification.yml` 命中;approved-change 账户过滤(`svc_patch`/`svc_config`,**精确匹配**账户名,仅"包含"这些字符串的账户不豁免)对已审批变更应不告警。Run/RunOnce 与 AppLocker(SrpV2)键只按键路径匹配(值名任意),其余被监控键需同时命中指定值名。**若根本没有 4657 流** —— 这本身是发现(检测盲点,而非「无事」),说明该键审核未开。
 - **Evidence**:匹配的 4657 记录 + 告警;被改键的前/后值及其属于哪类被监控路径(autostart / policy / network / billing config);操作进程与用户;是否在审批窗口内;以及**审核确实在被监控键上开着**的证明。
 - **FP-handling**:GPO 刷新、审批窗口内的厂商更新、端点管理基线、首装/lab 测试都会进入;把 logging 与 application-control 开关类改动的优先级置于良性 autostart 改动之上。
 - **Rollback / cleanup**:把占位键的测试值删回 / 改回原值;若为测试临时建的占位键则整键删除。

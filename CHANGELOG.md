@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log, and logs `event_log_gap` when records were lost. Failed-logon bursts are still detected when
   they straddle two polls. Channels the legacy API cannot read are skipped with a warning instead of
   silently reading the Application log.
+- **`anomalous_registry_modification.yml` now matches autorun and AppLocker changes.** The rule
+  required a key path and a value name from one shared list, so `Run`/`RunOnce` and `SrpV2` entries,
+  whose value names are arbitrary, never matched. Keys are now paired with their own value names.
+  The approved-account filter matches exactly instead of by substring. The live-fire evidence in
+  `docs/cvp/live-fire-evidence.md` predates this change; its `VenueBilling\UpdateUrl` stimulus still
+  matches the rule, but the run has not been repeated.
 
 ### Changed
 - `--alert-file` and `--webhook-url` can be used together; previously the webhook silently won.

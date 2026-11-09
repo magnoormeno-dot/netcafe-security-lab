@@ -9,6 +9,7 @@ description: >
   should be correlated with user, process, and host role.
 author: CafeSec Lab Research Team
 date: 2026/05/13
+modified: 2026/11/09
 license: MIT
 references:
   - https://attack.mitre.org/techniques/T1112/
@@ -25,35 +26,56 @@ logsource:
   product: windows
   service: security
 detection:
-  selection_registry_event:
+  registry_event:
     EventID: 4657
-  selection_paths:
+  # Each change_* block pairs a key with the values that matter under it. A
+  # single shared value-name list does not work: autorun entries and AppLocker
+  # rules carry arbitrary value names, so they would never match it.
+  #
+  # Any value written under these keys is relevant.
+  change_autorun:
     ObjectName|contains:
       - '\Software\Microsoft\Windows\CurrentVersion\Run'
       - '\Software\Microsoft\Windows\CurrentVersion\RunOnce'
-      - '\System\CurrentControlSet\Services\'
-      - '\Software\Policies\Microsoft\Windows Defender'
-      - '\Software\Policies\Microsoft\Windows\PowerShell'
-      - '\Software\Policies\Microsoft\Windows\SrpV2'
-      - '\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-      - '\System\CurrentControlSet\Services\Tcpip\Parameters'
-      - '\Software\VenueBilling'
-  selection_value_names:
+      - '\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'
+  change_applocker_policy:
+    ObjectName|contains: '\Software\Policies\Microsoft\Windows\SrpV2'
+  # These keys hold many unrelated values, so only the ones that disable,
+  # redirect, or repoint something are watched.
+  change_service_config:
+    ObjectName|contains: '\System\CurrentControlSet\Services\'
     ObjectValueName|contains:
       - 'ImagePath'
       - 'Start'
+  change_defender_policy:
+    ObjectName|contains: '\Software\Policies\Microsoft\Windows Defender'
+    ObjectValueName|contains:
       - 'DisableAntiSpyware'
       - 'DisableRealtimeMonitoring'
-      - 'EnableScriptBlockLogging'
-      - 'ProxyServer'
-      - 'NameServer'
+  change_powershell_logging:
+    ObjectName|contains: '\Software\Policies\Microsoft\Windows\PowerShell'
+    ObjectValueName|contains: 'EnableScriptBlockLogging'
+  change_proxy_config:
+    ObjectName|contains: '\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+    ObjectValueName|contains: 'ProxyServer'
+  change_dns_config:
+    ObjectName|contains: '\System\CurrentControlSet\Services\Tcpip'
+    ObjectValueName|contains: 'NameServer'
+  change_billing_config:
+    ObjectName|contains: '\Software\VenueBilling'
+    ObjectValueName|contains:
       - 'ServerAddress'
       - 'UpdateUrl'
+  # Local tuning warning:
+  # The account names below are placeholders. Replace them with the exact
+  # names of your maintenance accounts. Keep the match exact: a substring
+  # match would also exempt any account whose name merely contains one of
+  # these strings, including one created to hide a change.
   filter_approved_change:
-    SubjectUserName|contains:
+    SubjectUserName:
       - 'svc_patch'
       - 'svc_config'
-  condition: selection_registry_event and selection_paths and selection_value_names and not filter_approved_change
+  condition: registry_event and 1 of change_* and not filter_approved_change
 fields:
   - TimeCreated
   - Computer
@@ -67,4 +89,5 @@ falsepositives:
   - Vendor updates during approved maintenance windows
   - Endpoint management tools applying baseline configuration
   - Initial deployment or lab testing
+  - Software installers that register their own autorun entry
 level: medium

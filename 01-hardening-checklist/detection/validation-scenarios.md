@@ -134,9 +134,14 @@ approved-change-account filter works without over-suppressing.
 - Windows Security log Event ID 4657 (registry value modified), which requires
   registry object-access auditing to be enabled on the monitored keys.
 - Fields the rule selects on: `ObjectName` (a watched key path), `ObjectValueName`
-  (a watched value such as a Run entry, service `Start`/`ImagePath`, a logging
-  toggle, or a proxy/DNS value), `SubjectUserName`, `ProcessName`, `NewValue`,
-  `Computer`, `TimeCreated`.
+  (a watched value such as service `Start`/`ImagePath`, a logging toggle, or a
+  proxy/DNS value), `SubjectUserName`, `ProcessName`, `NewValue`, `Computer`,
+  `TimeCreated`.
+- Autorun (`Run`/`RunOnce`) and AppLocker (`SrpV2`) keys match on the key path
+  alone, because their value names are arbitrary. Every other watched key is
+  paired with specific value names.
+- The approved-change filter matches account names exactly. An account whose
+  name only contains `svc_patch` or `svc_config` is not exempt.
 
 **Evidence to collect**
 - The matching 4657 record(s) and the alert
