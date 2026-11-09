@@ -15,6 +15,7 @@ from typing import BinaryIO, Literal, Protocol, cast
 from integrity_monitor.core.baseline import (
     BaselineDiff,
     BaselineManager,
+    BaselineNotFoundError,
     BaselineVersion,
     FileRecord,
 )
@@ -174,13 +175,27 @@ class FileIntegrityMonitor:
             )
         return self.baseline_manager.create_version(result.records, metadata=dict(metadata or {}))
 
-    def scan(self, *, baseline: BaselineVersion | None = None) -> IntegrityScanResult:
-        """Scan configured targets and optionally compare with a baseline."""
+    def scan(
+        self,
+        *,
+        baseline: BaselineVersion | None = None,
+        require_baseline: bool = False,
+    ) -> IntegrityScanResult:
+        """Scan configured targets and optionally compare with a baseline.
+
+        Args:
+            baseline: Explicit baseline to compare against. Defaults to the
+                latest version held by the baseline manager.
+            require_baseline: Raise ``BaselineNotFoundError`` when there is no
+                baseline to compare against. Integrity checks should set this:
+                without it a missing baseline yields a result with no diff,
+                which reads as "no changes".
+        """
 
         records: list[FileRecord] = []
         findings: list[DetectionFinding] = []
         errors: dict[str, str] = {}
-        selected_baseline = self._resolve_baseline(baseline)
+        selected_baseline = self._resolve_baseline(baseline, required=require_baseline)
         use_cache = selected_baseline is None
 
         for path in self.iter_files():
@@ -203,16 +218,25 @@ class FileIntegrityMonitor:
 
         return IntegrityScanResult(records=records, diff=diff, findings=findings, errors=errors)
 
-    def _resolve_baseline(self, baseline: BaselineVersion | None) -> BaselineVersion | None:
+    def _resolve_baseline(
+        self,
+        baseline: BaselineVersion | None,
+        *,
+        required: bool = False,
+    ) -> BaselineVersion | None:
         """Return the explicit or latest baseline for this scan."""
 
         if baseline is not None:
             return baseline
         if self.baseline_manager is None:
+            if required:
+                raise BaselineNotFoundError("No baseline manager is configured for this scan")
             return None
         try:
             return self.baseline_manager.latest_version()
-        except FileNotFoundError:
+        except BaselineNotFoundError:
+            if required:
+                raise
             return None
 
     def iter_files(self) -> list[Path]:

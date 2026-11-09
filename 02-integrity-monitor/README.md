@@ -13,8 +13,19 @@ The tool is intentionally conservative. It does not bypass, patch, exploit, or t
 - Incremental file scanning using size and mtime prefilters.
 - Process anomaly checks for writable directories, unsigned Windows binaries, unusual parent-child relationships, and known-good baseline drift.
 - Windows event-log analysis for logon, process creation, service installation, service state, registry modification, and log-clearing events.
-- Console, file, and webhook alerting with time-window deduplication.
+- Console, file, and webhook alerting with time-window deduplication. A file and a webhook can be used together.
+- Windows event-log reading with per-channel bookmarks, so events are not skipped or repeated between polls.
 - CLI commands for `baseline`, `scan`, `monitor`, and `verify`.
+
+## Failure Behavior
+
+The monitor fails closed. When it cannot check, it says so instead of reporting a clean result.
+
+- `scan` and `monitor --once` exit non-zero and raise a critical alert when the baseline is missing, unreadable, fails signature verification, or is signed but no HMAC key was supplied. A long-running `monitor` raises the same alert each cycle and keeps its process and event checks running.
+- `verify` requires `--hmac-key-file` and exits non-zero when the store holds no baseline.
+- An alert that a backend cannot deliver is printed to stderr and retried on the next `monitor` cycle. `scan` and `monitor --once` exit non-zero when an alert is still undelivered.
+
+Alert on a non-zero exit code from the scheduled task. A task that stops running is otherwise silent.
 
 ## Installation
 

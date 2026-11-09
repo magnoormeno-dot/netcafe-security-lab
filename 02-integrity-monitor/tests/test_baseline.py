@@ -8,6 +8,7 @@ import pytest
 from integrity_monitor.core.baseline import (
     BaselineIntegrityError,
     BaselineManager,
+    BaselineNotFoundError,
     BaselineVersion,
     FileRecord,
 )
@@ -76,3 +77,48 @@ def test_baseline_rollback_creates_new_version(tmp_path: Path, hmac_key: bytes) 
     assert rolled_back.version_id != first.version_id
     assert "a.txt" in rolled_back.records
     assert rolled_back.metadata["rolled_back_from"] == first.version_id
+
+
+def test_signed_baseline_is_not_verified_without_key(tmp_path: Path, hmac_key: bytes) -> None:
+    path = tmp_path / "baseline.json"
+    BaselineManager(path, hmac_key=hmac_key).create_version([record("a.txt")])
+    keyless = BaselineManager(path)
+
+    version = keyless.list_versions()[0]
+
+    assert keyless.signature_status(version) == "unverifiable"
+    assert not keyless.verify_version(version)
+    with pytest.raises(BaselineIntegrityError, match="no HMAC key was provided"):
+        keyless.latest_version()
+
+
+def test_unsigned_baseline_fails_when_key_is_configured(tmp_path: Path, hmac_key: bytes) -> None:
+    path = tmp_path / "baseline.json"
+    BaselineManager(path).create_version([record("a.txt")])
+    keyed = BaselineManager(path, hmac_key=hmac_key)
+
+    version = keyed.list_versions()[0]
+
+    assert BaselineManager(path).signature_status(version) == "unsigned"
+    assert keyed.signature_status(version) == "invalid"
+    with pytest.raises(BaselineIntegrityError):
+        keyed.latest_version()
+
+
+def test_latest_version_reports_missing_baseline(tmp_path: Path) -> None:
+    manager = BaselineManager(tmp_path / "missing.json")
+
+    with pytest.raises(BaselineNotFoundError):
+        manager.latest_version()
+
+    # Still a FileNotFoundError for callers written against the old contract.
+    assert issubclass(BaselineNotFoundError, FileNotFoundError)
+
+
+@pytest.mark.parametrize("name", ["baseline.json", "baseline.sqlite"])
+def test_unreadable_store_is_an_integrity_error(tmp_path: Path, name: str) -> None:
+    path = tmp_path / name
+    path.write_bytes(b"this is not a baseline store " * 8)
+
+    with pytest.raises(BaselineIntegrityError, match="is unreadable"):
+        BaselineManager(path).latest_version()

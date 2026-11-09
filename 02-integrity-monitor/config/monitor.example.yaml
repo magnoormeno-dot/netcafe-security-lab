@@ -16,6 +16,7 @@ algorithms:
   - sha256
   - blake3
 
+# --alert-file on the command line overrides alerting.file.
 alerting:
   dedup_window_seconds: 900
   file: "C:\\CafeSec\\alerts.jsonl"
@@ -29,8 +30,11 @@ process_monitor:
     - restore
     - watchdog
 
+# Only classic logs can be read (names without a "/"). Channels such as
+# Microsoft-Windows-PowerShell/Operational are skipped with a warning.
+# state_file keeps event-log bookmarks between runs of `monitor --once`.
 event_analyzer:
   channels:
     - Security
     - System
-    - Microsoft-Windows-PowerShell/Operational
+  state_file: "C:\\CafeSec\\event-state.json"

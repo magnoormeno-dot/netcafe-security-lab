@@ -6,7 +6,12 @@ from typing import Any
 
 import requests
 
-from integrity_monitor.alerting.base import Alert, Alerter, DeduplicationCache
+from integrity_monitor.alerting.base import (
+    Alert,
+    AlertDeliveryError,
+    Alerter,
+    DeduplicationCache,
+)
 
 
 class WebhookAlerter(Alerter):
@@ -35,8 +40,15 @@ class WebhookAlerter(Alerter):
 
     def _send(self, alert: Alert) -> None:
         payload = self._payload(alert)
-        response = requests.post(self.url, json=payload, timeout=self.timeout_seconds)
-        response.raise_for_status()
+        try:
+            response = requests.post(self.url, json=payload, timeout=self.timeout_seconds)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            # The exception text usually embeds the webhook URL, which is a
+            # secret for Slack and Discord. Report only the failure type.
+            status = getattr(exc.response, "status_code", None)
+            detail = type(exc).__name__ if status is None else f"HTTP {status}"
+            raise AlertDeliveryError(f"Webhook delivery failed ({detail})") from exc
 
     def _payload(self, alert: Alert) -> dict[str, Any]:
         text = f"[{alert.severity.upper()}] {alert.title}: {alert.description}"

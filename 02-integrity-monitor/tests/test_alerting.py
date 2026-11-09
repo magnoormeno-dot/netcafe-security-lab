@@ -5,14 +5,32 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+import requests
 
 from integrity_monitor.alerting import (
     Alert,
+    AlertDeliveryError,
+    Alerter,
     ConsoleAlerter,
     DeduplicationCache,
     FileAlerter,
     WebhookAlerter,
 )
+
+
+class FlakyAlerter(Alerter):
+    """Fail a set number of deliveries, then succeed."""
+
+    def __init__(self, failures: int) -> None:
+        super().__init__(dedup_cache=DeduplicationCache(window_seconds=60))
+        self.failures = failures
+        self.sent: list[Alert] = []
+
+    def _send(self, alert: Alert) -> None:
+        if self.failures > 0:
+            self.failures -= 1
+            raise AlertDeliveryError("backend unavailable")
+        self.sent.append(alert)
 
 
 def test_deduplication_cache_suppresses_repeated_alert() -> None:
@@ -140,3 +158,61 @@ def test_webhook_emit_propagates_http_failure(monkeypatch: pytest.MonkeyPatch) -
         alerter.emit(
             Alert(title="Failure", severity="high", source="unit", description="backend error")
         )
+
+
+def test_failed_delivery_is_not_recorded_for_deduplication() -> None:
+    alert = Alert(title="Billing agent modified", severity="high", source="unit", description="x")
+    alerter = FlakyAlerter(failures=1)
+
+    with pytest.raises(AlertDeliveryError):
+        alerter.emit(alert)
+
+    # The failed attempt must not suppress the retry.
+    assert alerter.emit(alert)
+    assert alerter.sent == [alert]
+    # Once delivered, the alert is deduplicated as before.
+    assert not alerter.emit(alert)
+
+
+def test_webhook_wraps_connection_errors_without_leaking_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_url = "https://hooks.example.test/services/T000/B000/secret-token"
+
+    def fake_post(url: str, *, json: dict[str, Any], timeout: float) -> None:
+        raise requests.ConnectionError(f"Max retries exceeded with url: {url}")
+
+    monkeypatch.setattr("integrity_monitor.alerting.webhook.requests.post", fake_post)
+    alerter = WebhookAlerter(secret_url)
+
+    with pytest.raises(AlertDeliveryError) as excinfo:
+        alerter.emit(Alert(title="Failure", severity="high", source="unit", description="down"))
+
+    assert "secret-token" not in str(excinfo.value)
+    assert "ConnectionError" in str(excinfo.value)
+
+
+def test_webhook_reports_http_status_on_rejection(monkeypatch: pytest.MonkeyPatch) -> None:
+    class RejectingResponse:
+        def raise_for_status(self) -> None:
+            response = requests.Response()
+            response.status_code = 500
+            raise requests.HTTPError("500 Server Error for url: secret", response=response)
+
+    def fake_post(_url: str, *, json: dict[str, Any], timeout: float) -> RejectingResponse:
+        return RejectingResponse()
+
+    monkeypatch.setattr("integrity_monitor.alerting.webhook.requests.post", fake_post)
+    alerter = WebhookAlerter("https://example.test/webhook")
+
+    with pytest.raises(AlertDeliveryError, match="HTTP 500"):
+        alerter.emit(Alert(title="Failure", severity="high", source="unit", description="500"))
+
+
+def test_file_alerter_wraps_write_errors(tmp_path: Path) -> None:
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("occupied", encoding="utf-8")
+    alerter = FileAlerter(blocker / "alerts.jsonl")
+
+    with pytest.raises(AlertDeliveryError, match="Alert file write failed"):
+        alerter.emit(Alert(title="Title", severity="high", source="unit", description="desc"))

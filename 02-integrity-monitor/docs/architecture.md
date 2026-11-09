@@ -32,6 +32,10 @@ flowchart LR
 
 The baseline is useful only if the storage path and HMAC key are protected. In production, store baselines and alert outputs where customer users and cashier users cannot edit them. Send copies to a central log collector when possible.
 
+## Failure Model
+
+A check that cannot run is reported as a failure, never as a clean result. A missing, unreadable, or unverifiable baseline raises a critical alert and a non-zero exit code. An undelivered alert is echoed to stderr and retried. Windows event logs are read from a per-channel bookmark, and a gap in the record sequence is logged as `event_log_gap`.
+
 ## Platform Model
 
 Core file scanning, baseline storage, alerting, and tests are cross-platform. Windows-specific checks are optional and degrade safely on Linux CI.
