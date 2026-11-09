@@ -59,6 +59,13 @@ class Win32EventLike(Protocol):
     RecordNumber: int
 
 
+class Win32EventLogReader(Protocol):
+    """Subset of the pywin32 ``win32evtlog`` module used to read a log."""
+
+    def ReadEventLog(self, handle: object, flags: int, offset: int) -> Sequence[Win32EventLike]:
+        """Return the next batch of events, or an empty batch at the end."""
+
+
 class JsonEventProvider:
     """Load normalized events from a JSON fixture or export."""
 
@@ -88,16 +95,51 @@ class JsonEventProvider:
 
 
 class WindowsEventProvider:
-    """Read recent Windows events through pywin32 when available."""
+    """Read new Windows events through pywin32 when available.
+
+    The provider keeps a bookmark per channel: the newest record number it has
+    returned. The first read of a channel returns at most ``limit_per_channel``
+    recent events. Every later read returns the events newer than the bookmark,
+    so events are neither skipped between polls nor returned twice.
+
+    Bookmarks live in memory. Pass ``state_path`` to persist them, which is
+    required for gap-free coverage when each poll is a separate process.
+
+    Only classic logs (Security, System, Application, and other names without
+    a ``/``) are supported. Channels such as
+    ``Microsoft-Windows-PowerShell/Operational`` need the newer Evt API; the
+    legacy API would silently open the Application log instead, so they are
+    skipped with a warning.
+    """
 
     DEFAULT_CHANNELS: ClassVar[tuple[str, ...]] = ("Security", "System")
 
-    def __init__(self, channels: list[str] | None = None, *, limit_per_channel: int = 200) -> None:
+    def __init__(
+        self,
+        channels: list[str] | None = None,
+        *,
+        limit_per_channel: int = 200,
+        max_backlog_per_channel: int = 20000,
+        state_path: str | Path | None = None,
+    ) -> None:
+        """Initialize the provider.
+
+        Args:
+            channels: Classic event logs to read.
+            limit_per_channel: Events returned by the first read of a channel.
+            max_backlog_per_channel: Upper bound on events returned by a
+                catch-up read. Older unread events are dropped with a warning.
+            state_path: Optional JSON file used to persist bookmarks.
+        """
+
         self.channels = channels or list(self.DEFAULT_CHANNELS)
         self.limit_per_channel = limit_per_channel
+        self.max_backlog_per_channel = max_backlog_per_channel
+        self.state_path = None if state_path is None else Path(state_path)
+        self._bookmarks: dict[str, int] = self._load_bookmarks()
 
     def events(self) -> list[EventRecord]:
-        """Return recent Windows events.
+        """Return Windows events that have not been returned before.
 
         On non-Windows platforms the provider returns an empty list so the
         development and CI workflow remains portable.
@@ -114,21 +156,112 @@ class WindowsEventProvider:
         records: list[EventRecord] = []
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
         for channel in self.channels:
+            if "/" in channel:
+                LOGGER.warning("event_channel_not_supported", extra={"channel": channel})
+                continue
             handle = win32evtlog.OpenEventLog(None, channel)
             try:
-                count = 0
-                while count < self.limit_per_channel:
-                    events = win32evtlog.ReadEventLog(handle, flags, 0)
-                    if not events:
-                        break
-                    for event in events:
-                        if count >= self.limit_per_channel:
-                            break
-                        records.append(self._from_win32_event(channel, event))
-                        count += 1
+                records.extend(self._read_new_events(win32evtlog, handle, flags, channel))
             finally:
                 win32evtlog.CloseEventLog(handle)
+        self._save_bookmarks()
         return records
+
+    def _read_new_events(
+        self,
+        win32evtlog: Win32EventLogReader,
+        handle: object,
+        flags: int,
+        channel: str,
+    ) -> list[EventRecord]:
+        """Read backwards from the newest event until the bookmark is reached."""
+
+        previous = self._bookmarks.get(channel)
+        bookmark = previous
+        limit = self.limit_per_channel if bookmark is None else self.max_backlog_per_channel
+        collected: list[EventRecord] = []
+        newest: int | None = None
+        oldest: int | None = None
+        reached_bookmark = False
+        truncated = False
+
+        while not (reached_bookmark or truncated):
+            batch = win32evtlog.ReadEventLog(handle, flags, 0)
+            if not batch:
+                break
+            for event in batch:
+                record_number = int(event.RecordNumber)
+                if newest is None:
+                    newest = record_number
+                    if bookmark is not None and record_number < bookmark:
+                        # Record numbers went backwards: the log was cleared or
+                        # replaced, so everything in it is new.
+                        LOGGER.warning(
+                            "event_log_reset_detected",
+                            extra={
+                                "channel": channel,
+                                "bookmark": bookmark,
+                                "newest_record": record_number,
+                            },
+                        )
+                        bookmark = None
+                        limit = self.max_backlog_per_channel
+                if bookmark is not None and record_number <= bookmark:
+                    reached_bookmark = True
+                    break
+                if len(collected) >= limit:
+                    truncated = True
+                    break
+                collected.append(self._from_win32_event(channel, event))
+                oldest = record_number
+
+        if bookmark is not None and oldest is not None and not reached_bookmark:
+            missed = oldest - bookmark - 1
+            if missed > 0:
+                # Either the backlog cap was hit or the log wrapped past the
+                # bookmark. Say so: a silent gap would read as "nothing happened".
+                LOGGER.warning(
+                    "event_log_gap",
+                    extra={
+                        "channel": channel,
+                        "missed_events": missed,
+                        "reason": "backlog_limit" if truncated else "log_overwritten",
+                    },
+                )
+        if newest is not None:
+            self._bookmarks[channel] = newest
+        collected.reverse()
+        return collected
+
+    def _load_bookmarks(self) -> dict[str, int]:
+        if self.state_path is None or not self.state_path.exists():
+            return {}
+        try:
+            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
+            return {str(name): int(value) for name, value in dict(payload["channels"]).items()}
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            # Start again from the recent-events window rather than trusting a
+            # damaged bookmark.
+            LOGGER.warning(
+                "event_state_unreadable",
+                extra={"path": str(self.state_path), "error": str(exc)},
+            )
+            return {}
+
+    def _save_bookmarks(self) -> None:
+        if self.state_path is None:
+            return
+        payload = json.dumps({"schema_version": 1, "channels": self._bookmarks}, sort_keys=True)
+        temporary = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(payload, encoding="utf-8")
+            temporary.replace(self.state_path)
+        except OSError as exc:
+            LOGGER.warning(
+                "event_state_not_saved",
+                extra={"path": str(self.state_path), "error": str(exc)},
+            )
 
     @staticmethod
     def _from_win32_event(channel: str, event: Win32EventLike) -> EventRecord:
@@ -156,6 +289,7 @@ class EventAnalyzer:
     REGISTRY_MODIFY = 4657
     LOG_CLEARED = 1102
     SERVICE_EVENTS: ClassVar[frozenset[int]] = frozenset({7034, 7035, 7036, 7040, 7045})
+    MAX_REMEMBERED_FAILED_LOGONS = 10000
 
     def __init__(
         self,
@@ -171,6 +305,9 @@ class EventAnalyzer:
         self.provider = provider or WindowsEventProvider()
         self.failed_login_burst_threshold = failed_login_burst_threshold
         self.failed_login_burst_window = timedelta(minutes=failed_login_burst_window_minutes)
+        # Failed logons seen in earlier polls, keyed by event identity, so a
+        # burst that straddles two polls is still counted as one burst.
+        self._recent_failed_logons: dict[tuple[str, str, int], EventRecord] = {}
         self.critical_keywords = {
             item.lower()
             for item in (
@@ -209,7 +346,8 @@ class EventAnalyzer:
         findings: list[EventFinding] = []
         for event in events:
             findings.extend(self._analyze_event(event))
-        findings.extend(self._detect_failed_login_bursts(events))
+        candidates, active_groups = self._failed_login_candidates(events)
+        findings.extend(self._detect_failed_login_bursts(candidates, active_groups=active_groups))
         return findings
 
     def _analyze_event(self, event: EventRecord) -> list[EventFinding]:
@@ -239,14 +377,80 @@ class EventAnalyzer:
             evidence={"user": event.user, "data": event.data},
         )
 
-    def _detect_failed_login_bursts(self, events: list[EventRecord]) -> list[EventFinding]:
-        """Detect repeated failed logons by host, user, and source address."""
+    def _failed_login_candidates(
+        self, events: list[EventRecord]
+    ) -> tuple[list[EventRecord], set[tuple[str, str, str]]]:
+        """Merge new failed logons with recent ones from earlier polls.
+
+        Returns the events to evaluate for bursts and the groups that received
+        a new failed logon in this poll. Only those groups are evaluated, so a
+        burst is not reported again on every poll while it stays in memory.
+
+        Events are remembered only when they carry a record number and a
+        parseable timestamp. Without a record number a repeated read of the
+        same source cannot be told apart from new events.
+        """
+
+        untracked: list[EventRecord] = []
+        active_groups: set[tuple[str, str, str]] = set()
+        for event in events:
+            if event.event_id != self.LOGIN_FAILURE:
+                continue
+            identity = self._event_identity(event)
+            if identity is None or self._parse_timestamp(event.timestamp) is None:
+                untracked.append(event)
+                active_groups.add(self._failed_login_group_key(event))
+                continue
+            if identity in self._recent_failed_logons:
+                continue
+            self._recent_failed_logons[identity] = event
+            active_groups.add(self._failed_login_group_key(event))
+        self._prune_recent_failed_logons()
+        return [*self._recent_failed_logons.values(), *untracked], active_groups
+
+    def _prune_recent_failed_logons(self) -> None:
+        """Forget failed logons that can no longer be part of a burst."""
+
+        timed = [
+            (self._parse_timestamp(event.timestamp) or datetime.min, identity)
+            for identity, event in self._recent_failed_logons.items()
+        ]
+        if not timed:
+            return
+        timed.sort()
+        cutoff = timed[-1][0] - self.failed_login_burst_window
+        overflow = max(0, len(timed) - self.MAX_REMEMBERED_FAILED_LOGONS)
+        for position, (timestamp, identity) in enumerate(timed):
+            if timestamp < cutoff or position < overflow:
+                del self._recent_failed_logons[identity]
+
+    @staticmethod
+    def _event_identity(event: EventRecord) -> tuple[str, str, int] | None:
+        """Return a stable identity for an event read from a Windows log."""
+
+        record_number = event.data.get("record_number")
+        if isinstance(record_number, bool) or not isinstance(record_number, int):
+            return None
+        return (event.channel, event.computer, record_number)
+
+    def _detect_failed_login_bursts(
+        self,
+        events: list[EventRecord],
+        *,
+        active_groups: set[tuple[str, str, str]] | None = None,
+    ) -> list[EventFinding]:
+        """Detect repeated failed logons by host, user, and source address.
+
+        When ``active_groups`` is given, only those groups are evaluated.
+        """
 
         grouped: dict[tuple[str, str, str], list[tuple[datetime | None, int, EventRecord]]] = {}
         for index, event in enumerate(events):
             if event.event_id != self.LOGIN_FAILURE:
                 continue
             key = self._failed_login_group_key(event)
+            if active_groups is not None and key not in active_groups:
+                continue
             grouped.setdefault(key, []).append(
                 (self._parse_timestamp(event.timestamp), index, event)
             )

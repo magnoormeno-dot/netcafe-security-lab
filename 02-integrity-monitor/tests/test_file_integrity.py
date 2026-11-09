@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from integrity_monitor.core.baseline import BaselineManager
+import pytest
+
+from integrity_monitor.core.baseline import BaselineManager, BaselineNotFoundError
 from integrity_monitor.core.file_integrity import FileIntegrityMonitor, ScanTarget
 
 
@@ -82,3 +84,15 @@ def test_heuristic_finding_for_writable_executable(tmp_path: Path) -> None:
     assert any(
         finding.rule_id == "heuristic.writable_executable_path" for finding in result.findings
     )
+
+
+def test_scan_can_require_a_baseline(sample_tree: Path, tmp_path: Path) -> None:
+    manager = BaselineManager(tmp_path / "baseline.json")
+    monitor = FileIntegrityMonitor([sample_tree], baseline_manager=manager)
+
+    # Without the flag a missing baseline yields a result with no diff.
+    assert monitor.scan().diff is None
+    with pytest.raises(BaselineNotFoundError):
+        monitor.scan(require_baseline=True)
+    with pytest.raises(BaselineNotFoundError):
+        FileIntegrityMonitor([sample_tree]).scan(require_baseline=True)

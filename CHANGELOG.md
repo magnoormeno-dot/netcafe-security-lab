@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Integrity monitor no longer passes when it cannot check.** `scan` reported `"changes": 0` and
+  exited 0 when the baseline store had been deleted, and `verify` printed "All baseline versions
+  verified" for a missing store or when run without a key. `scan` and `monitor --once` now exit
+  non-zero and raise a critical alert when the baseline is missing, unreadable, fails verification,
+  or is signed but no HMAC key was supplied; a long-running `monitor` raises the alert and keeps its
+  other checks running. `verify` requires `--hmac-key-file` and fails on an empty store. An empty
+  HMAC key file is rejected.
+- **Configuration sections are now read.** Only `targets`, `algorithms`, and `excludes` were used;
+  `alerting`, `process_monitor`, and `event_analyzer` were ignored without notice, so the configured
+  alert file was never written and the process hash-drift check could not be enabled from the CLI.
+  Unknown keys are logged as `config_key_ignored`. See `02-integrity-monitor/config/README.md`.
+- **A failed alert delivery no longer loses alerts.** An alert was recorded for deduplication before
+  it was sent, and a webhook error aborted the run. Delivery failures now raise
+  `AlertDeliveryError`, the alert is echoed to stderr and retried, the remaining alerts are still
+  sent, and the run exits non-zero. Webhook errors no longer include the webhook URL.
+- **Windows event reading no longer skips or repeats events.** Each poll re-read the newest 200
+  records per channel. The reader now keeps a per-channel bookmark (optionally persisted with
+  `--event-state-file` / `event_analyzer.state_file`), returns only newer records, detects a cleared
+  log, and logs `event_log_gap` when records were lost. Failed-logon bursts are still detected when
+  they straddle two polls. Channels the legacy API cannot read are skipped with a warning instead of
+  silently reading the Application log.
+
+### Changed
+- `--alert-file` and `--webhook-url` can be used together; previously the webhook silently won.
+- `baseline list` prints a `signature=` column (`valid`, `invalid`, `unsigned`, `unverifiable`).
+- The example configs no longer list `Microsoft-Windows-PowerShell/Operational`, which the event
+  reader cannot read.
+
 ## [0.2.0] - 2026-06-04
 
 Maturity pass on the `04-validation-lab` testbed: from "well-engineered but never run /

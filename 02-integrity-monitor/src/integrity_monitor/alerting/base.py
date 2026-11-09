@@ -40,6 +40,10 @@ class Alert:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+class AlertDeliveryError(RuntimeError):
+    """Raised when an alert backend cannot deliver an alert."""
+
+
 class DeduplicationCache:
     """Time-window alert deduplication cache."""
 
@@ -53,16 +57,31 @@ class DeduplicationCache:
         self.window_seconds = window_seconds
         self._last_seen: dict[str, float] = {}
 
-    def should_emit(self, alert: Alert, *, now: float | None = None) -> bool:
-        """Return whether an alert should be emitted."""
+    def is_duplicate(self, alert: Alert, *, now: float | None = None) -> bool:
+        """Return whether a matching alert was recorded inside the window."""
 
         current = time.time() if now is None else now
-        key = alert.stable_key()
-        previous = self._last_seen.get(key)
-        if previous is not None and current - previous < self.window_seconds:
-            return False
-        self._last_seen[key] = current
+        previous = self._last_seen.get(alert.stable_key())
+        return previous is not None and current - previous < self.window_seconds
+
+    def record(self, alert: Alert, *, now: float | None = None) -> None:
+        """Remember that an alert was delivered."""
+
+        current = time.time() if now is None else now
+        self._last_seen[alert.stable_key()] = current
         self._prune(current)
+
+    def should_emit(self, alert: Alert, *, now: float | None = None) -> bool:
+        """Check and record an alert in one step.
+
+        Backends that can fail should call ``is_duplicate`` and ``record``
+        separately so an alert is only recorded once it has been delivered.
+        """
+
+        current = time.time() if now is None else now
+        if self.is_duplicate(alert, now=current):
+            return False
+        self.record(alert, now=current)
         return True
 
     def _prune(self, now: float) -> None:
@@ -82,13 +101,23 @@ class Alerter(ABC):
         self.dedup_cache = dedup_cache or DeduplicationCache()
 
     def emit(self, alert: Alert) -> bool:
-        """Emit an alert if it is not suppressed by deduplication."""
+        """Emit an alert if it is not suppressed by deduplication.
 
-        if not self.dedup_cache.should_emit(alert):
+        The alert is recorded for deduplication only after the backend accepts
+        it. A failed delivery therefore stays eligible for a retry instead of
+        being suppressed for the rest of the window.
+        """
+
+        if self.dedup_cache.is_duplicate(alert):
             return False
         self._send(alert)
+        self.dedup_cache.record(alert)
         return True
 
     @abstractmethod
     def _send(self, alert: Alert) -> None:
-        """Send an alert to the backend."""
+        """Send an alert to the backend.
+
+        Raise ``AlertDeliveryError`` when the backend is unreachable or rejects
+        the alert, so callers can keep running and retry.
+        """

@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 LOGGER = logging.getLogger(__name__)
 StorageKind = Literal["json", "sqlite"]
+SignatureStatus = Literal["valid", "invalid", "unsigned", "unverifiable"]
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,10 @@ class BaselineIntegrityError(RuntimeError):
     """Raised when a baseline signature cannot be verified."""
 
 
+class BaselineNotFoundError(FileNotFoundError):
+    """Raised when a baseline store holds no version to compare against."""
+
+
 class BaselineManager:
     """Manage signed, versioned file baselines."""
 
@@ -184,24 +189,42 @@ class BaselineManager:
         digest = hmac.new(self.hmac_key, payload, sha256).hexdigest()
         return version.with_signature(digest)
 
-    def verify_version(self, version: BaselineVersion) -> bool:
-        """Verify a baseline version signature.
+    def signature_status(self, version: BaselineVersion) -> SignatureStatus:
+        """Classify a baseline version signature.
 
-        Unsigned baselines are considered valid only when the manager has no
-        HMAC key configured. If a key is configured, missing signatures fail.
+        Returns ``valid`` or ``invalid`` when a key is configured (a missing
+        signature is ``invalid``). Without a key the result is ``unsigned`` for
+        a version that carries no signature and ``unverifiable`` for one that
+        does, because the signature cannot be checked.
         """
 
         if self.hmac_key is None:
-            return True
+            return "unverifiable" if version.signature else "unsigned"
         if not version.signature:
-            return False
+            return "invalid"
         expected = hmac.new(self.hmac_key, self._canonical_payload(version), sha256).hexdigest()
-        return hmac.compare_digest(expected, version.signature)
+        return "valid" if hmac.compare_digest(expected, version.signature) else "invalid"
+
+    def verify_version(self, version: BaselineVersion) -> bool:
+        """Verify a baseline version signature.
+
+        Unsigned baselines are accepted only when the manager has no HMAC key
+        configured. If a key is configured, missing signatures fail. A signed
+        baseline also fails when no key is configured: it cannot be checked, so
+        it must not be reported as verified.
+        """
+
+        return self.signature_status(version) in {"valid", "unsigned"}
 
     def require_valid(self, version: BaselineVersion) -> None:
         """Raise when a baseline version fails signature verification."""
 
-        if not self.verify_version(version):
+        status = self.signature_status(version)
+        if status == "unverifiable":
+            raise BaselineIntegrityError(
+                f"Baseline version {version.version_id} is signed but no HMAC key was provided"
+            )
+        if status == "invalid":
             raise BaselineIntegrityError(
                 f"Baseline version {version.version_id} failed verification"
             )
@@ -218,9 +241,19 @@ class BaselineManager:
     def list_versions(self) -> list[BaselineVersion]:
         """Return all persisted baseline versions sorted by creation time."""
 
-        versions = (
-            self._load_json_versions() if self.storage == "json" else self._load_sqlite_versions()
-        )
+        try:
+            versions = (
+                self._load_json_versions()
+                if self.storage == "json"
+                else self._load_sqlite_versions()
+            )
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+            # A store that exists but cannot be read or parsed gives no
+            # trustworthy baseline. Report it as an integrity failure so
+            # callers do not have to guess which low-level error means that.
+            raise BaselineIntegrityError(
+                f"Baseline store {self.store_path} is unreadable: {exc}"
+            ) from exc
         return sorted(versions, key=lambda item: item.created_at)
 
     def latest_version(self) -> BaselineVersion:
@@ -228,7 +261,7 @@ class BaselineManager:
 
         versions = self.list_versions()
         if not versions:
-            raise FileNotFoundError(f"No baseline versions found in {self.store_path}")
+            raise BaselineNotFoundError(f"No baseline versions found in {self.store_path}")
         latest = versions[-1]
         self.require_valid(latest)
         return latest
@@ -319,15 +352,21 @@ class BaselineManager:
     def _connect(self) -> sqlite3.Connection:
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.store_path)
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS baseline_versions (
-                version_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL,
-                payload TEXT NOT NULL
+        try:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS baseline_versions (
+                    version_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
+        except sqlite3.Error:
+            # Do not leave the file open (and locked on Windows) when it turns
+            # out not to be a usable database.
+            connection.close()
+            raise
         return connection
 
     def _save_sqlite(self, version: BaselineVersion) -> None:

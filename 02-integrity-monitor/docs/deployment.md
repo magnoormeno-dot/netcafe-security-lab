@@ -35,8 +35,11 @@ integrity-monitor scan `
   --alert-file "C:\CafeSec\alerts.jsonl"
 ```
 
+The command exits non-zero when the baseline is missing, unreadable, or fails verification, and when an alert could not be delivered. Monitor the task's last result as well as the alert file.
+
 ## Operations
 
 - Treat deleted or modified billing binaries as high severity.
+- Treat a `Baseline missing`, `Baseline failed verification`, or `Baseline HMAC key unavailable` alert as critical. It means file integrity is not being checked.
 - Preserve alerts and scan output before reimaging.
 - Re-baseline after vendor updates only when signatures, hashes, and service health are validated.
